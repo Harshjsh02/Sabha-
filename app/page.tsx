@@ -70,7 +70,7 @@ export default function HomePage() {
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold mb-6 animate-pulse">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>सभा (Sabha) - 100% Free Zoom Alternative</span>
+            <span>सभा (Sabha) - Free Zoom Alternative for 50 to 100+ Attendees</span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white leading-tight">
@@ -81,9 +81,9 @@ export default function HomePage() {
           </h1>
 
           <p className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
-            High-performance WebRTC peer-to-peer video conferencing with Zoom-parity admin controls,
-            screen sharing, live chat, interactive whiteboard, and browser recording. Built for free
-            Vercel hosting and Firebase.
+            High-performance video conferencing powered by LiveKit SFU &amp; WebRTC with Zoom-parity admin
+            controls, screen sharing, live chat, interactive whiteboard, and browser recording. Built for
+            CodersHigh and hosted 100% free on Vercel and Firebase.
           </p>
 
           <div className="mt-4 flex items-center justify-center gap-4 text-xs">
@@ -252,19 +252,18 @@ export default function HomePage() {
 
             <div className="space-y-4 text-xs text-slate-300 leading-relaxed">
               <p>
-                Sabha operates on a <strong>Pure Peer-to-Peer WebRTC Mesh Topology</strong>. Media
-                (audio & video) is transmitted directly between participants' browsers using Google's
-                free public STUN servers, while room state and signaling are handled by Firebase
-                Firestore.
+                Sabha features a <strong>dual-engine media architecture</strong>: an integrated high-speed{' '}
+                <strong>LiveKit Cloud SFU</strong> designed for large community gatherings, alongside a{' '}
+                <strong>Direct Peer-to-Peer WebRTC Mesh</strong> fallback.
               </p>
 
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-3">
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
                   <div>
-                    <p className="font-bold text-white text-sm">Optimal Experience: 4 to 6 People</p>
+                    <p className="font-bold text-white text-sm">Community Assemblies &amp; Webinars: 50 to 100+ People</p>
                     <p className="text-slate-400 mt-0.5">
-                      Full HD 720p/1080p video, low latency, and crystal clear audio on typical laptops and broadband.
+                      Powered by LiveKit SFU with Dynacast and Adaptive Streaming. Each user uploads only 1 stream while the cloud server distributes video to everyone, preventing laptop CPU throttling.
                     </p>
                   </div>
                 </div>
@@ -272,9 +271,9 @@ export default function HomePage() {
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
                   <div>
-                    <p className="font-bold text-white text-sm">Playable Limit: 8 to 10 People</p>
+                    <p className="font-bold text-white text-sm">Small Syncs &amp; Pair Programming: 4 to 8 People</p>
                     <p className="text-slate-400 mt-0.5">
-                      Smooth group discussion when inactive participants keep cameras off or in audio-centric mode.
+                      Direct peer-to-peer mesh running over free Google STUN servers with zero server compute required.
                     </p>
                   </div>
                 </div>
@@ -284,16 +283,14 @@ export default function HomePage() {
                   <div>
                     <p className="font-bold text-white text-sm">Total Meetings Across the App: Thousands / Day</p>
                     <p className="text-slate-400 mt-0.5">
-                      Firebase Spark gives 50,000 free document reads/day and 20,000 writes/day, and Vercel offers 100 GB bandwidth/month at $0.00 cost!
+                      Firebase Spark free tier gives 50,000 document reads and 20,000 writes daily, and Vercel provides 100 GB monthly bandwidth at $0.00 cost!
                     </p>
                   </div>
                 </div>
               </div>
 
               <p className="text-slate-400 italic">
-                *Note: Commercial Zoom routes calls through massive server farms (SFUs) that cost
-                thousands of dollars monthly. By utilizing WebRTC P2P mesh, Sabha guarantees 100% free
-                usage forever without credit card requirements!
+                *Built specifically for CodersHigh community events, workshops, and team collaboration with 100% free cloud resources!
               </p>
             </div>
 
