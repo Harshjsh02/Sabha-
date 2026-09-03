@@ -88,5 +88,12 @@ Open [http://localhost:3000](http://localhost:3000) to view your Sabha instance.
 1. Push your code to your GitHub repository (`https://github.com/Harshjsh02/Sabha-.git`).
 2. Go to [Vercel Dashboard](https://vercel.com) and click **"Add New Project"**.
 3. Import your GitHub repository.
-4. Add the `NEXT_PUBLIC_FIREBASE_*` environment variables in the Vercel dashboard.
+4. Add the `NEXT_PUBLIC_FIREBASE_*` and `LIVEKIT_*` environment variables in the Vercel dashboard.
 5. Click **Deploy**! Your Sabha meeting app is live with SSL, global CDN, and $0 running costs.
+
+---
+
+## 👨‍💻 Author & Community
+
+Designed & Built with ❤️ by **Harsh Joshi** for the **CodersHigh** community.
+

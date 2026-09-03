@@ -223,12 +223,14 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-slate-800/60 bg-slate-950 py-6">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-slate-300">Sabha (सभा)</span>
             <span>•</span>
-            <span>Hosted on Vercel</span>
-            <span>•</span>
-            <span>Database on Firebase</span>
+            <span>
+              Designed &amp; Built by{' '}
+              <span className="text-amber-400 font-semibold">Harsh Joshi</span> for{' '}
+              <span className="text-white font-medium">CodersHigh</span>
+            </span>
           </div>
           <div className="flex items-center gap-4">
             <button
