@@ -9,6 +9,7 @@ export interface FirebaseConfigOptions {
   storageBucket: string;
   messagingSenderId: string;
   appId: string;
+  measurementId?: string;
 }
 
 export function getActiveFirebaseConfig(): FirebaseConfigOptions | null {
@@ -20,6 +21,7 @@ export function getActiveFirebaseConfig(): FirebaseConfigOptions | null {
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || '',
   };
 
   if (envConfig.apiKey && envConfig.projectId) {
