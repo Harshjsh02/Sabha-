@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Participant, RoomSettings, ChatMessage, ReactionItem } from '@/lib/types';
 import { WebRTCManager } from '@/lib/webrtc';
+import { LiveKitRoomManager } from '@/lib/livekitService';
 import {
   getOrCreateRoom,
   updateRoomSettings,
@@ -20,7 +21,7 @@ import { ParticipantsPanel } from './ParticipantsPanel';
 import { WhiteboardModal } from './WhiteboardModal';
 import { HostControlModal } from './HostControlModal';
 import { ReactionsOverlay } from './ReactionsOverlay';
-import { Copy, Check, ShieldCheck, Clock } from 'lucide-react';
+import { Copy, Check, ShieldCheck, Clock, Zap } from 'lucide-react';
 
 interface MeetingRoomProps {
   roomId: string;
@@ -73,10 +74,12 @@ export function MeetingRoom({
   // Meeting duration timer
   const [duration, setDuration] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isLiveKitSFU, setIsLiveKitSFU] = useState(false);
 
   const rtcManagerRef = useRef<WebRTCManager | null>(null);
+  const liveKitManagerRef = useRef<LiveKitRoomManager | null>(null);
 
-  // Initialize Room & WebRTC Manager
+  // Initialize Room & Media Engine
   useEffect(() => {
     let active = true;
 
@@ -99,51 +102,97 @@ export function MeetingRoom({
         return;
       }
 
-      // 2. Initialize WebRTC
-      const manager = new WebRTCManager(roomId, initialParticipant);
-      rtcManagerRef.current = manager;
+      // 2. Try LiveKit SFU first (handles 50 to 100+ participants)
+      let connectedViaLiveKit = false;
+      try {
+        const username = initialParticipant.name || initialParticipant.id;
+        const res = await fetch(
+          `/api/livekit-token?room=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&isHost=${initialParticipant.isHost}`
+        );
 
-      if (initialStream) {
-        manager.setLocalStream(initialStream);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token && data.wsUrl && active) {
+            const lkManager = new LiveKitRoomManager(data.wsUrl, data.token, initialParticipant);
+            liveKitManagerRef.current = lkManager;
+
+            lkManager.onRemoteStreamAdded = (peerId, stream) => {
+              setRemoteStreams((prev) => new Map(prev).set(peerId, stream));
+            };
+
+            lkManager.onRemoteStreamRemoved = (peerId) => {
+              setRemoteStreams((prev) => {
+                const next = new Map(prev);
+                next.delete(peerId);
+                return next;
+              });
+            };
+
+            lkManager.onParticipantsChanged = (participants) => {
+              setRemoteParticipants(participants);
+            };
+
+            await lkManager.connect();
+            await lkManager.publishLocalTracks(
+              initialParticipant.audioEnabled,
+              initialParticipant.videoEnabled
+            );
+
+            setIsLiveKitSFU(true);
+            connectedViaLiveKit = true;
+          }
+        }
+      } catch (err) {
+        console.warn('LiveKit SFU connection attempt returned:', err);
       }
 
-      manager.onRemoteStreamAdded = (peerId, stream) => {
-        setRemoteStreams((prev) => new Map(prev).set(peerId, stream));
-      };
+      // 3. Fallback to WebRTC Mesh if LiveKit is not configured or fails
+      if (!connectedViaLiveKit && active) {
+        const manager = new WebRTCManager(roomId, initialParticipant);
+        rtcManagerRef.current = manager;
 
-      manager.onRemoteStreamRemoved = (peerId) => {
-        setRemoteStreams((prev) => {
-          const next = new Map(prev);
-          next.delete(peerId);
-          return next;
-        });
-      };
-
-      manager.onParticipantsChanged = (participants) => {
-        const others = participants.filter((p) => p.id !== initialParticipant.id);
-        setRemoteParticipants(others);
-      };
-
-      manager.onMuteRequested = () => {
-        if (localStream) {
-          localStream.getAudioTracks().forEach((t) => (t.enabled = false));
+        if (initialStream) {
+          manager.setLocalStream(initialStream);
         }
-        setLocalParticipant((prev) => ({ ...prev, audioEnabled: false }));
-        manager.updateParticipantState({ audioEnabled: false });
-        alert('You have been muted by the host.');
-      };
 
-      manager.onKicked = () => {
-        alert('You have been removed from this Sabha by the host.');
-        router.push('/');
-      };
+        manager.onRemoteStreamAdded = (peerId, stream) => {
+          setRemoteStreams((prev) => new Map(prev).set(peerId, stream));
+        };
 
-      await manager.joinRoom();
+        manager.onRemoteStreamRemoved = (peerId) => {
+          setRemoteStreams((prev) => {
+            const next = new Map(prev);
+            next.delete(peerId);
+            return next;
+          });
+        };
+
+        manager.onParticipantsChanged = (participants) => {
+          const others = participants.filter((p) => p.id !== initialParticipant.id);
+          setRemoteParticipants(others);
+        };
+
+        manager.onMuteRequested = () => {
+          if (localStream) {
+            localStream.getAudioTracks().forEach((t) => (t.enabled = false));
+          }
+          setLocalParticipant((prev) => ({ ...prev, audioEnabled: false }));
+          manager.updateParticipantState({ audioEnabled: false });
+          alert('You have been muted by the host.');
+        };
+
+        manager.onKicked = () => {
+          alert('You have been removed from this Sabha by the host.');
+          router.push('/');
+        };
+
+        await manager.joinRoom();
+      }
     }
 
     init();
 
-    // 3. Subscriptions
+    // 4. Subscriptions
     const unsubSettings = subscribeToRoomSettings(roomId, (updated) => {
       setRoomSettings(updated);
     });
@@ -159,7 +208,7 @@ export function MeetingRoom({
       setLatestReaction(rx);
     });
 
-    // 4. Duration timer
+    // 5. Duration timer
     const timer = setInterval(() => {
       setDuration((d) => d + 1);
     }, 1000);
@@ -170,6 +219,9 @@ export function MeetingRoom({
       unsubSettings();
       unsubChat();
       unsubReactions();
+      if (liveKitManagerRef.current) {
+        liveKitManagerRef.current.disconnect();
+      }
       if (rtcManagerRef.current) {
         rtcManagerRef.current.leaveRoom();
       }
@@ -184,26 +236,38 @@ export function MeetingRoom({
   }, [isChatOpen]);
 
   // Toggle Audio
-  const handleToggleAudio = () => {
+  const handleToggleAudio = async () => {
     if (!roomSettings.allowUnmute && !localParticipant.isHost && !localParticipant.audioEnabled) {
       alert('The host has disabled participants from unmuting.');
       return;
     }
 
     const nextState = !localParticipant.audioEnabled;
+
+    if (liveKitManagerRef.current) {
+      await liveKitManagerRef.current.setAudioEnabled(nextState);
+    }
+
     if (localStream) {
       localStream.getAudioTracks().forEach((t) => (t.enabled = nextState));
     }
+
     setLocalParticipant((p) => ({ ...p, audioEnabled: nextState }));
     rtcManagerRef.current?.updateParticipantState({ audioEnabled: nextState });
   };
 
   // Toggle Video
-  const handleToggleVideo = () => {
+  const handleToggleVideo = async () => {
     const nextState = !localParticipant.videoEnabled;
+
+    if (liveKitManagerRef.current) {
+      await liveKitManagerRef.current.setVideoEnabled(nextState);
+    }
+
     if (localStream) {
       localStream.getVideoTracks().forEach((t) => (t.enabled = nextState));
     }
+
     setLocalParticipant((p) => ({ ...p, videoEnabled: nextState }));
     rtcManagerRef.current?.updateParticipantState({ videoEnabled: nextState });
   };
@@ -217,6 +281,9 @@ export function MeetingRoom({
 
     if (localParticipant.screenSharing) {
       // Stop sharing
+      if (liveKitManagerRef.current) {
+        await liveKitManagerRef.current.setScreenShareEnabled(false);
+      }
       if (screenStream) {
         screenStream.getTracks().forEach((t) => t.stop());
         setScreenStream(null);
@@ -229,27 +296,34 @@ export function MeetingRoom({
       rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-
-        setScreenStream(stream);
-        rtcManagerRef.current?.setLocalStream(stream);
-        setLocalStream(stream);
-        setLocalParticipant((p) => ({ ...p, screenSharing: true }));
-        rtcManagerRef.current?.updateParticipantState({ screenSharing: true });
-
-        // Handle user stopping share from browser floating UI
-        stream.getVideoTracks()[0].onended = () => {
-          if (initialStream) {
-            rtcManagerRef.current?.setLocalStream(initialStream);
-            setLocalStream(initialStream);
+        if (liveKitManagerRef.current) {
+          const lkScreen = await liveKitManagerRef.current.setScreenShareEnabled(true);
+          if (lkScreen) {
+            setScreenStream(lkScreen);
           }
-          setScreenStream(null);
-          setLocalParticipant((p) => ({ ...p, screenSharing: false }));
-          rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
-        };
+          setLocalParticipant((p) => ({ ...p, screenSharing: true }));
+        } else {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
+
+          setScreenStream(stream);
+          rtcManagerRef.current?.setLocalStream(stream);
+          setLocalStream(stream);
+          setLocalParticipant((p) => ({ ...p, screenSharing: true }));
+          rtcManagerRef.current?.updateParticipantState({ screenSharing: true });
+
+          stream.getVideoTracks()[0].onended = () => {
+            if (initialStream) {
+              rtcManagerRef.current?.setLocalStream(initialStream);
+              setLocalStream(initialStream);
+            }
+            setScreenStream(null);
+            setLocalParticipant((p) => ({ ...p, screenSharing: false }));
+            rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
+          };
+        }
       } catch (err) {
         console.warn('Screen share canceled or failed:', err);
       }
@@ -292,7 +366,6 @@ export function MeetingRoom({
       setIsRecording(false);
     } else {
       try {
-        // Prompt for screen/window to record
         const captureStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: true,
@@ -325,7 +398,7 @@ export function MeetingRoom({
           }, 100);
         };
 
-        recorder.start(1000); // 1-second chunks
+        recorder.start(1000);
         mediaRecorderRef.current = recorder;
         setIsRecording(true);
       } catch (err) {
@@ -359,12 +432,18 @@ export function MeetingRoom({
     for (const p of remoteParticipants) {
       await rtcManagerRef.current?.sendKickCommand(p.id);
     }
+    if (liveKitManagerRef.current) {
+      await liveKitManagerRef.current.disconnect();
+    }
     await rtcManagerRef.current?.leaveRoom();
     router.push('/');
   };
 
   const handleLeaveMeeting = async () => {
     if (confirm('Are you sure you want to leave the Sabha?')) {
+      if (liveKitManagerRef.current) {
+        await liveKitManagerRef.current.disconnect();
+      }
       await rtcManagerRef.current?.leaveRoom();
       router.push('/');
     }
@@ -397,6 +476,11 @@ export function MeetingRoom({
               <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-mono">
                 {roomId}
               </span>
+              {isLiveKitSFU && (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> 100+ Capacity
+                </span>
+              )}
               {roomSettings.isLocked && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30">
                   Locked
