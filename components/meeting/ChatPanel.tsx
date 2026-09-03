@@ -54,7 +54,7 @@ export function ChatPanel({
   });
 
   return (
-    <div className="w-80 md:w-96 bg-slate-900 border-l border-slate-800 flex flex-col h-full z-40 text-slate-100 shadow-2xl">
+    <div className="fixed inset-y-0 right-0 sm:relative w-full sm:w-80 md:w-96 bg-slate-900 border-l border-slate-800 flex flex-col h-full z-40 text-slate-100 shadow-2xl">
       {/* Header */}
       <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
         <div className="flex items-center gap-2">

@@ -7,7 +7,6 @@ import {
   Video,
   VideoOff,
   ScreenShare,
-  StopCircle,
   Users,
   MessageSquare,
   Smile,
@@ -16,7 +15,6 @@ import {
   PhoneOff,
   PenTool,
   CircleDot,
-  MoreHorizontal,
 } from 'lucide-react';
 
 interface MeetingControlsProps {
@@ -67,35 +65,47 @@ export function MeetingControls({
   const emojis = ['👍', '❤️', '👏', '😂', '🎉', '🚀'];
 
   return (
-    <div className="h-20 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-4 flex items-center justify-between z-30 select-none">
+    <div className="h-16 sm:h-20 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-2 sm:px-4 flex items-center justify-between z-30 select-none pb-safe">
       {/* Left section: Audio & Video */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         {/* Microphone Toggle */}
         <button
           onClick={onToggleAudio}
-          className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
+          className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition ${
             audioEnabled
               ? 'text-slate-200 hover:bg-slate-800/80'
               : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
           }`}
           title={audioEnabled ? 'Mute Microphone' : 'Unmute Microphone'}
         >
-          {audioEnabled ? <Mic className="w-5 h-5 mb-1" /> : <MicOff className="w-5 h-5 mb-1" />}
-          <span className="text-[10px] font-medium">{audioEnabled ? 'Mute' : 'Unmute'}</span>
+          {audioEnabled ? (
+            <Mic className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
+          ) : (
+            <MicOff className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
+          )}
+          <span className="text-[9px] sm:text-[10px] font-medium hidden xs:inline">
+            {audioEnabled ? 'Mute' : 'Unmute'}
+          </span>
         </button>
 
         {/* Video Toggle */}
         <button
           onClick={onToggleVideo}
-          className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
+          className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition ${
             videoEnabled
               ? 'text-slate-200 hover:bg-slate-800/80'
               : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
           }`}
           title={videoEnabled ? 'Stop Video' : 'Start Video'}
         >
-          {videoEnabled ? <Video className="w-5 h-5 mb-1" /> : <VideoOff className="w-5 h-5 mb-1" />}
-          <span className="text-[10px] font-medium">{videoEnabled ? 'Stop Video' : 'Start Video'}</span>
+          {videoEnabled ? (
+            <Video className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
+          ) : (
+            <VideoOff className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
+          )}
+          <span className="text-[9px] sm:text-[10px] font-medium hidden xs:inline">
+            {videoEnabled ? 'Stop' : 'Start'}
+          </span>
         </button>
       </div>
 
@@ -105,23 +115,23 @@ export function MeetingControls({
         {isHost && (
           <button
             onClick={onOpenSecurityModal}
-            className="flex flex-col items-center justify-center w-14 h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
+            className="flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
             title="Sabha Security & Admin Settings"
           >
-            <Shield className="w-5 h-5 mb-1 text-amber-400" />
-            <span className="text-[10px] font-medium">Security</span>
+            <Shield className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 text-amber-400" />
+            <span className="text-[9px] sm:text-[10px] font-medium hidden sm:inline">Security</span>
           </button>
         )}
 
         {/* Participants Roster */}
         <button
           onClick={onToggleParticipantsPanel}
-          className="relative flex flex-col items-center justify-center w-14 h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
+          className="relative flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
           title="Participants List"
         >
-          <Users className="w-5 h-5 mb-1" />
-          <span className="text-[10px] font-medium">People</span>
-          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.2 bg-slate-800 border border-slate-700 text-amber-400 text-[10px] font-bold rounded-full">
+          <Users className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
+          <span className="text-[9px] sm:text-[10px] font-medium hidden sm:inline">People</span>
+          <span className="absolute top-1 right-1 px-1.5 py-0.2 bg-slate-800 border border-slate-700 text-amber-400 text-[9px] font-bold rounded-full">
             {participantCount}
           </span>
         </button>
@@ -129,22 +139,22 @@ export function MeetingControls({
         {/* In-Meeting Chat */}
         <button
           onClick={onToggleChatPanel}
-          className="relative flex flex-col items-center justify-center w-14 h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
+          className="relative flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
           title="Meeting Chat"
         >
-          <MessageSquare className="w-5 h-5 mb-1" />
-          <span className="text-[10px] font-medium">Chat</span>
+          <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
+          <span className="text-[9px] sm:text-[10px] font-medium hidden sm:inline">Chat</span>
           {unreadChatCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-amber-500 text-slate-950 text-[10px] font-extrabold rounded-full flex items-center justify-center animate-pulse">
+            <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-amber-500 text-slate-950 text-[9px] font-extrabold rounded-full flex items-center justify-center animate-pulse">
               {unreadChatCount}
             </span>
           )}
         </button>
 
-        {/* Share Screen */}
+        {/* Share Screen (Desktop/Tablet) */}
         <button
           onClick={onToggleScreenShare}
-          className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
+          className={`hidden sm:flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
             screenSharing
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
               : 'text-slate-200 hover:bg-slate-800/80'
@@ -155,7 +165,7 @@ export function MeetingControls({
           <span className="text-[10px] font-medium">{screenSharing ? 'Sharing' : 'Share'}</span>
         </button>
 
-        {/* Whiteboard */}
+        {/* Whiteboard (Tablet/Desktop) */}
         <button
           onClick={onOpenWhiteboard}
           className="hidden md:flex flex-col items-center justify-center w-14 h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
@@ -168,7 +178,7 @@ export function MeetingControls({
         {/* Local Recording */}
         <button
           onClick={onToggleRecording}
-          className={`hidden sm:flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
+          className={`hidden md:flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
             isRecording
               ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
               : 'text-slate-200 hover:bg-slate-800/80'
@@ -183,11 +193,11 @@ export function MeetingControls({
         <div className="relative">
           <button
             onClick={() => setShowReactionsMenu(!showReactionsMenu)}
-            className="flex flex-col items-center justify-center w-14 h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
+            className="flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
             title="Reactions & Hand Raise"
           >
-            <Smile className="w-5 h-5 mb-1 text-amber-400" />
-            <span className="text-[10px] font-medium">React</span>
+            <Smile className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 text-amber-400" />
+            <span className="text-[9px] sm:text-[10px] font-medium hidden sm:inline">React</span>
           </button>
 
           {showReactionsMenu && (
@@ -200,7 +210,7 @@ export function MeetingControls({
                       onSendReaction(emoji);
                       setShowReactionsMenu(false);
                     }}
-                    className="text-2xl p-2 rounded-xl hover:bg-slate-800 hover:scale-125 transition-transform"
+                    className="text-2xl p-2 rounded-xl hover:bg-slate-800 hover:scale-125 transition-transform active:scale-95"
                   >
                     {emoji}
                   </button>
@@ -229,11 +239,11 @@ export function MeetingControls({
       <div className="flex items-center">
         <button
           onClick={onLeaveMeeting}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition shadow-lg shadow-rose-600/20"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition shadow-lg shadow-rose-600/20 active:scale-95"
           title="Leave Sabha"
         >
-          <PhoneOff className="w-4 h-4" />
-          <span className="hidden sm:inline">{isHost ? 'End Sabha' : 'Leave'}</span>
+          <PhoneOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="hidden xs:inline">{isHost ? 'End' : 'Leave'}</span>
         </button>
       </div>
     </div>

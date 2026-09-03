@@ -59,3 +59,13 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 1);
 }
+
+/* Mobile Safe Area Padding for iOS Home Indicator */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Smooth touch scrolling momentum on iOS and Android */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
