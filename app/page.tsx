@@ -21,14 +21,12 @@ import {
   Smile,
   HelpCircle,
 } from 'lucide-react';
-import { FirebaseSetupModal } from '@/components/FirebaseSetupModal';
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, signInWithGoogle, isFirebaseReady } = useAuth();
+  const { user, signInWithGoogle } = useAuth();
   const [joinCode, setJoinCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [showCapacityModal, setShowCapacityModal] = useState(false);
 
   // Generate random 9-digit meeting code
@@ -239,21 +237,9 @@ export default function HomePage() {
             >
               Capacity Guide
             </button>
-            <button
-              onClick={() => setIsSetupModalOpen(true)}
-              className="hover:text-slate-300 transition"
-            >
-              Firebase Settings
-            </button>
           </div>
         </div>
       </footer>
-
-      {/* Firebase Setup Modal */}
-      <FirebaseSetupModal
-        isOpen={isSetupModalOpen}
-        onClose={() => setIsSetupModalOpen(false)}
-      />
 
       {/* Capacity & Scalability Info Modal */}
       {showCapacityModal && (
