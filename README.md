@@ -83,6 +83,28 @@ Open [http://localhost:3000](http://localhost:3000) to view your Sabha instance.
 
 ---
 
+## 📚 Complete Project Documentation Suite
+
+For comprehensive architectural, engineering, security, and product deep-dives, consult the following specifications:
+
+| Document | Purpose & Scope |
+| :--- | :--- |
+| 📋 [Product Requirements Document (PRD)](docs/PRD.md) | Problem validation, Zoom parity requirements, feature sets & NFRs |
+| 🏗️ [System Architecture](docs/SYSTEM_ARCHITECTURE.md) | High-level topology, LiveKit SFU + Mesh hybrid engine & sequence diagrams |
+| 🔌 [API & Signaling Specification](docs/API_SPEC.md) | REST routes, LiveKit JWT token API, Firestore signaling payloads |
+| 🗄️ [Database & State Architecture](docs/DATABASE.md) | Firestore ERD, collection schemas, quotas, and security rules |
+| 🛡️ [Security & Privacy Guide](docs/SECURITY.md) | DTLS-SRTP encryption, zero-knowledge recording & threat mitigations |
+| 🎙️ [Audio Engine & Speaker Detection](docs/AUDIO_ENGINE.md) | Web Audio API decibel analysis, RMS calculation & active speaker halos |
+| 👥 [User Personas](docs/USER_PERSONAS.md) | Target audience profiles (Educator, Startup CTO, Low-Bandwidth Guest) |
+| 🗺️ [User Journeys & Interaction Flows](docs/USER_JOURNEY.md) | Host and attendee interaction journeys and escalation flows |
+| 💰 [Business Model & Cloud Economics](docs/BUSINESS_MODEL.md) | Zero-cost baseline breakdown, SaaS pathways & breakeven analysis |
+| 🚀 [Investor & Community Pitch](docs/PITCH.md) | Vision, market opportunity, unfair advantages & key milestones |
+| ❓ [Frequently Asked Questions (FAQ)](docs/FAQ.md) | Setup assistance, audio/video troubleshooting & technical FAQs |
+| 📋 [Task Plan & Sprint Breakdown](tasks.md) | Granular sprint-by-sprint implementation tracking |
+| 📝 [Roadmap & Todo List](todo.md) | Immediate action items and upcoming features |
+
+---
+
 ## 🌐 Deploying to Vercel in 60 Seconds
 
 1. Push your code to your GitHub repository (`https://github.com/Harshjsh02/Sabha-.git`).
