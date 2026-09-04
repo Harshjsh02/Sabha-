@@ -89,6 +89,9 @@ For comprehensive architectural, engineering, security, and product deep-dives, 
 
 | Document | Purpose & Scope |
 | :--- | :--- |
+| 📖 [Product Master Specification (product.md)](product.md) | Comprehensive 21-section end-to-end product & system architecture |
+| 🧠 [Development Context (context.md)](context.md) | Current phase, tech stack, state management & edge case handling |
+| 🤖 [AI Pair Programming Guide (prompt.md)](prompt.md) | System prompt, core principles, glassmorphic styling & workflows |
 | 📋 [Product Requirements Document (PRD)](docs/PRD.md) | Problem validation, Zoom parity requirements, feature sets & NFRs |
 | 🏗️ [System Architecture](docs/SYSTEM_ARCHITECTURE.md) | High-level topology, LiveKit SFU + Mesh hybrid engine & sequence diagrams |
 | 🔌 [API & Signaling Specification](docs/API_SPEC.md) | REST routes, LiveKit JWT token API, Firestore signaling payloads |
