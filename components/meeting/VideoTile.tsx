@@ -43,9 +43,10 @@ export function VideoTile({
 
   // Check if participant has a live video track
   const hasLiveVideoTrack = Boolean(
-    participant.videoEnabled &&
-      stream &&
-      stream.getVideoTracks().some((t) => t.readyState === 'live')
+    stream &&
+      stream.getVideoTracks().some(
+        (t) => t.readyState === 'live' && t.enabled && (!isLocal || participant.videoEnabled)
+      )
   );
 
   // Attach stream to HTMLVideoElement and ensure playback
@@ -60,6 +61,8 @@ export function VideoTile({
       videoEl.play().catch((err) => {
         console.warn('Video playback notice:', err);
       });
+    } else if (!hasLiveVideoTrack && videoEl.srcObject) {
+      videoEl.srcObject = null;
     }
   }, [stream, hasLiveVideoTrack]);
 
@@ -96,16 +99,32 @@ export function VideoTile({
           : 'border-slate-800 hover:border-slate-700'
       }`}
     >
-      {/* Video Stream (Kept mounted for instant play) */}
+      {/* Video Stream (Muted so browser never rejects autoplay) */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        muted={isLocal}
+        muted={true}
         className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''} ${
           hasLiveVideoTrack ? 'block' : 'hidden'
         }`}
       />
+
+      {/* Dedicated audio element for remote participants to prevent autoplay conflicts */}
+      {!isLocal && stream && (
+        <audio
+          ref={(audioEl) => {
+            if (audioEl && audioEl.srcObject !== stream) {
+              audioEl.srcObject = stream;
+              audioEl.play().catch((err) => {
+                console.warn('Audio playback notice:', err);
+              });
+            }
+          }}
+          autoPlay
+          playsInline
+        />
+      )}
 
       {/* Avatar Fallback */}
       {!hasLiveVideoTrack && (

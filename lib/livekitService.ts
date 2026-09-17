@@ -31,13 +31,13 @@ export class LiveKitRoomManager {
   private remoteScreenStreams: Map<string, MediaStream> = new Map();
 
   constructor(wsUrl: string, token: string, localParticipantInfo: Participant) {
-    this.wsUrl = wsUrl;
-    this.token = token;
+    this.wsUrl = (wsUrl || '').trim();
+    this.token = (token || '').trim();
     this.localParticipantInfo = localParticipantInfo;
 
     this.room = new Room({
-      adaptiveStream: true,
-      dynacast: true,
+      adaptiveStream: false,
+      dynacast: false,
       videoCaptureDefaults: {
         resolution: { width: 1280, height: 720 },
       },
@@ -52,6 +52,18 @@ export class LiveKitRoomManager {
       RoomEvent.TrackSubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
         const peerId = participant.identity;
+
+        // Auto-play audio tracks reliably via hidden audio element
+        if (track.kind === Track.Kind.Audio) {
+          try {
+            const audioEl = track.attach();
+            audioEl.style.display = 'none';
+            audioEl.id = `lk_audio_${peerId}_${track.sid}`;
+            document.body.appendChild(audioEl);
+          } catch (e) {
+            console.warn('Audio track attach notice:', e);
+          }
+        }
 
         // Route screen share to dedicated presentation stream
         if (publication.source === Track.Source.ScreenShare) {
@@ -71,7 +83,8 @@ export class LiveKitRoomManager {
         if (!stream.getTracks().some((t) => t.id === track.mediaStreamTrack.id)) {
           stream.addTrack(track.mediaStreamTrack);
         }
-        this.onRemoteStreamAdded(peerId, stream);
+        // Emit a fresh MediaStream reference so React state updates trigger immediately
+        this.onRemoteStreamAdded(peerId, new MediaStream(stream.getTracks()));
         this.syncParticipants();
       }
     );
@@ -81,6 +94,12 @@ export class LiveKitRoomManager {
       RoomEvent.TrackUnsubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
         const peerId = participant.identity;
+
+        if (track.kind === Track.Kind.Audio) {
+          try {
+            track.detach().forEach((el) => el.remove());
+          } catch {}
+        }
 
         if (publication.source === Track.Source.ScreenShare) {
           this.remoteScreenStreams.delete(peerId);
@@ -95,6 +114,8 @@ export class LiveKitRoomManager {
           if (stream.getTracks().length === 0) {
             this.remoteMediaStreams.delete(peerId);
             this.onRemoteStreamRemoved(peerId);
+          } else {
+            this.onRemoteStreamAdded(peerId, new MediaStream(stream.getTracks()));
           }
         }
         this.syncParticipants();
@@ -201,16 +222,7 @@ export class LiveKitRoomManager {
 
   public async setAudioEnabled(enabled: boolean): Promise<MediaStream> {
     try {
-      const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
-      if (micPub) {
-        if (enabled) {
-          await micPub.unmute();
-        } else {
-          await micPub.mute();
-        }
-      } else {
-        await this.room.localParticipant.setMicrophoneEnabled(enabled);
-      }
+      await this.room.localParticipant.setMicrophoneEnabled(enabled);
     } catch (err) {
       console.warn('Microphone toggle warning:', err);
     }
@@ -224,16 +236,7 @@ export class LiveKitRoomManager {
 
   public async setVideoEnabled(enabled: boolean): Promise<MediaStream> {
     try {
-      const camPub = this.room.localParticipant.getTrackPublication(Track.Source.Camera);
-      if (camPub) {
-        if (enabled) {
-          await camPub.unmute();
-        } else {
-          await camPub.mute();
-        }
-      } else {
-        await this.room.localParticipant.setCameraEnabled(enabled);
-      }
+      await this.room.localParticipant.setCameraEnabled(enabled);
     } catch (err) {
       console.warn('Camera toggle warning:', err);
     }
@@ -280,7 +283,11 @@ export class LiveKitRoomManager {
     // Add remote participants
     this.room.remoteParticipants.forEach((rp) => {
       const hasAudio = rp.isMicrophoneEnabled;
-      const hasVideo = rp.isCameraEnabled;
+      const mediaStream = this.remoteMediaStreams.get(rp.identity);
+      const hasStreamVideo = Boolean(
+        mediaStream && mediaStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled)
+      );
+      const hasVideo = rp.isCameraEnabled || hasStreamVideo;
 
       list.push({
         id: rp.identity,

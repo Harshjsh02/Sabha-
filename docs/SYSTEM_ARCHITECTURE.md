@@ -68,13 +68,17 @@ At meeting initialization inside [`MeetingRoom.tsx`](file:///components/meeting/
 1. **Hardware Release in Lobby:** Prior to entering the room, [`GreenRoom.tsx`](file:///components/meeting/GreenRoom.tsx) explicitly terminates all preview media stream tracks (`stream.getTracks().forEach(t => t.stop())`). This immediately releases mobile Android (Camera2 / AudioRecord HAL) and desktop OS hardware handles, eliminating `NotReadableError: device in use` conflicts.
 2. The client requests a LiveKit token from `/api/livekit-token?room={roomId}&username={peerId}&isHost={isHost}`.
 3. **If LiveKit responds with valid JWT and WebSocket URL:**
-   - Instantiates [`LiveKitRoomManager`](file:///lib/livekitService.ts).
+   - Server-side and client-side sanitization strips accidental whitespace/tab characters (`\t`) from environment variables (`LIVEKIT_URL`).
+   - Instantiates [`LiveKitRoomManager`](file:///lib/livekitService.ts) with `adaptiveStream: false, dynacast: false` to ensure SFU never throttles custom `<video>` elements without element attachment observers.
    - Local webcam and microphone tracks are published via native `setCameraEnabled` and `setMicrophoneEnabled`.
-   - In-call mute/unmute toggles execute at the publication layer via `pub.mute()` and `pub.unmute()`, avoiding hardware re-acquisition latency.
+   - In-call mute/unmute toggles execute cleanly via native room manager controls without hardware re-acquisition latency.
+   - Video elements in [`VideoTile.tsx`](file:///components/meeting/VideoTile.tsx) maintain `muted={true}` with dedicated background `<audio>` playback, bypassing strict mobile (Android Brave/iOS Safari) unmuted autoplay restrictions.
+   - Incoming stream updates emit fresh `MediaStream` references (`new MediaStream(stream.getTracks())`) so React re-render cycles bind video feeds instantly.
    - Screen sharing tracks (`Track.Source.ScreenShare`) are segregated into dedicated streams (`onRemoteScreenStreamAdded` / `onRemoteScreenStreamRemoved`), preventing camera streams from colliding with presentations.
 4. **If LiveKit returns an error or is unconfigured:**
    - Falls back gracefully to [`WebRTCManager`](file:///lib/webrtc.ts).
    - Initializes direct peer-to-peer `RTCPeerConnection` instances between all room participants.
+   - Re-packages incoming audio and video tracks onto fresh `MediaStream` objects to trigger reliable rendering on track addition.
    - SDP offers/answers and ICE candidates are relayed through Firestore sub-collections or local `BroadcastChannel`.
 
 ### 2.2 Spotlight Presentation Stage & Screen Sharing Architecture

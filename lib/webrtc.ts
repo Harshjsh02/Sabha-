@@ -176,11 +176,15 @@ export class WebRTCManager {
 
     // Handle remote tracks
     pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (stream) {
-        this.remoteStreams.set(peerId, stream);
-        this.onRemoteStreamAdded(peerId, stream);
+      let stream = event.streams[0];
+      if (!stream) {
+        stream = this.remoteStreams.get(peerId) || new MediaStream();
+        if (!stream.getTracks().some((t) => t.id === event.track.id)) {
+          stream.addTrack(event.track);
+        }
       }
+      this.remoteStreams.set(peerId, stream);
+      this.onRemoteStreamAdded(peerId, new MediaStream(stream.getTracks()));
     };
 
     // ICE candidates

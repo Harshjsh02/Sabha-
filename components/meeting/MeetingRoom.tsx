@@ -133,11 +133,13 @@ export function MeetingRoom({
         if (res.ok) {
           const data = await res.json();
           if (data.token && data.wsUrl && active) {
-            const lkManager = new LiveKitRoomManager(data.wsUrl, data.token, initialParticipant);
+            const cleanWsUrl = (data.wsUrl || '').trim();
+            const cleanToken = (data.token || '').trim();
+            const lkManager = new LiveKitRoomManager(cleanWsUrl, cleanToken, initialParticipant);
             liveKitManagerRef.current = lkManager;
 
             lkManager.onRemoteStreamAdded = (peerId, stream) => {
-              setRemoteStreams((prev) => new Map(prev).set(peerId, stream));
+              setRemoteStreams((prev) => new Map(prev).set(peerId, new MediaStream(stream.getTracks())));
             };
 
             lkManager.onRemoteStreamRemoved = (peerId) => {
@@ -150,7 +152,7 @@ export function MeetingRoom({
 
             // Dedicated screen sharing stream subscriptions
             lkManager.onRemoteScreenStreamAdded = (peerId, stream) => {
-              setRemoteScreenStreams((prev) => new Map(prev).set(peerId, stream));
+              setRemoteScreenStreams((prev) => new Map(prev).set(peerId, new MediaStream(stream.getTracks())));
             };
 
             lkManager.onRemoteScreenStreamRemoved = (peerId) => {
@@ -227,7 +229,7 @@ export function MeetingRoom({
         }
 
         manager.onRemoteStreamAdded = (peerId, stream) => {
-          setRemoteStreams((prev) => new Map(prev).set(peerId, stream));
+          setRemoteStreams((prev) => new Map(prev).set(peerId, new MediaStream(stream.getTracks())));
         };
 
         manager.onRemoteStreamRemoved = (peerId) => {
