@@ -225,15 +225,15 @@ export function MeetingControls({
         {/* Local Recording */}
         <button
           onClick={onToggleRecording}
-          className={`hidden md:flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
+          className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition cursor-pointer ${
             isRecording
-              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse shadow-md shadow-rose-500/20'
               : 'text-slate-200 hover:bg-slate-800/80'
           }`}
-          title={isRecording ? 'Stop Recording' : 'Record Sabha Locally'}
+          title={isRecording ? 'Stop Recording' : 'Record Screen & Audio'}
         >
-          <CircleDot className="w-5 h-5 mb-1 text-rose-500" />
-          <span className="text-[10px] font-medium">{isRecording ? 'Rec...' : 'Record'}</span>
+          <CircleDot className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 text-rose-500" />
+          <span className="text-[9px] sm:text-[10px] font-medium hidden xs:inline">{isRecording ? 'Stop Rec' : 'Record'}</span>
         </button>
 
         {/* Reactions & Hand Raise Popover */}
@@ -286,11 +286,11 @@ export function MeetingControls({
       <div className="flex items-center">
         <button
           onClick={onLeaveMeeting}
-          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition shadow-lg shadow-rose-600/20 active:scale-95"
-          title="Leave Sabha"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition shadow-lg shadow-rose-600/20 active:scale-95 cursor-pointer"
+          title={isHost ? 'End or Leave Sabha' : 'Leave Sabha'}
         >
           <PhoneOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span className="hidden xs:inline">{isHost ? 'End' : 'Leave'}</span>
+          <span>{isHost ? 'End' : 'Leave'}</span>
         </button>
       </div>
     </div>

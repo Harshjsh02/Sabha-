@@ -5,6 +5,9 @@
 ---
 
 ## 🎯 Recently Completed
+- [x] Zoom-style "End Meeting for All" vs "Leave Meeting" options modal (`LeaveMeetingModal.tsx`) with server-side room teardown (`/api/room/leave` + LiveKit `deleteRoom`) and broadcast termination signals.
+- [x] Multi-source recording with microphone voice mixing via `AudioContext` and `RecordModal` options dialog.
+- [x] Prominent floating "Close Board" button directly on canvas surface in `WhiteboardModal.tsx` and flexbox overflow fix.
 - [x] Fixed screen sharing fallback in WebRTC Mesh mode (`navigator.mediaDevices.getDisplayMedia`) with browser `onended` track restoration.
 - [x] Fixed zombie LiveKit ref bug: gated assignment and safely disconnected on 401 Unauthorized / errors to allow automatic WebRTC Mesh fallback.
 - [x] Added bidirectional transceiver pre-negotiation (`audio` & `video` sendrecv) in `WebRTCManager` for instant 0ms camera/screen swapping via `replaceTrack`.

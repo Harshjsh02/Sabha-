@@ -43,7 +43,7 @@ export class WebRTCManager {
   public onRemoteStreamRemoved: (peerId: string) => void = () => {};
   public onParticipantsChanged: (participants: Participant[]) => void = () => {};
   public onMuteRequested: () => void = () => {};
-  public onKicked: () => void = () => {};
+  public onKicked: (reason?: string) => void = () => {};
   public onWhiteboardReceived: (event: any) => void = () => {};
 
   // Cleanups
@@ -352,7 +352,8 @@ export class WebRTCManager {
     }
 
     if (signal.type === 'kick-command') {
-      this.onKicked();
+      const reason = (signal.payload as any)?.reason || 'kicked';
+      this.onKicked(reason);
       return;
     }
 
@@ -452,16 +453,16 @@ export class WebRTCManager {
     }
   }
 
-  public async sendKickCommand(targetPeerId: string) {
+  public async sendKickCommand(targetPeerId: string, reason: 'kicked' | 'meeting-ended' = 'kicked') {
     await this.sendSignal({
       from: this.localParticipant.id,
       to: targetPeerId,
       type: 'kick-command',
-      payload: {},
+      payload: { reason },
       timestamp: Date.now(),
     });
 
-    if (isFirebaseConfigured() && db) {
+    if (isFirebaseConfigured() && db && targetPeerId !== 'broadcast') {
       try {
         const participantRef = doc(db, `rooms/${this.roomId}/participants/${targetPeerId}`);
         await deleteDoc(participantRef);

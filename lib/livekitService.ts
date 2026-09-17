@@ -7,6 +7,7 @@ import {
   Track,
   LocalTrackPublication,
   LocalParticipant,
+  DisconnectReason,
 } from 'livekit-client';
 import { Participant } from './types';
 
@@ -24,7 +25,7 @@ export class LiveKitRoomManager {
   public onParticipantsChanged: (participants: Participant[]) => void = () => {};
   public onActiveSpeakersChanged: (speakerIds: string[]) => void = () => {};
   public onDataReceived: (payload: any, peerId: string) => void = () => {};
-  public onKicked: () => void = () => {};
+  public onKicked: (reason?: string) => void = () => {};
   public onLocalStreamChanged: (stream: MediaStream) => void = () => {};
 
   private remoteMediaStreams: Map<string, MediaStream> = new Map();
@@ -175,6 +176,11 @@ export class LiveKitRoomManager {
         const decoder = new TextDecoder();
         const str = decoder.decode(payload);
         const data = JSON.parse(str);
+        if (data.type === 'kick-command' || data.type === 'end-meeting') {
+          const reason = data.payload?.reason || (data.type === 'end-meeting' ? 'meeting-ended' : 'kicked');
+          this.onKicked(reason);
+          return;
+        }
         this.onDataReceived(data, participant?.identity || '');
       } catch (err) {
         console.warn('Failed to parse received data packet:', err);
@@ -182,8 +188,13 @@ export class LiveKitRoomManager {
     });
 
     // Room disconnected
-    this.room.on(RoomEvent.Disconnected, () => {
+    this.room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       this.remoteMediaStreams.clear();
+      if (reason === DisconnectReason.ROOM_DELETED) {
+        this.onKicked('meeting-ended');
+      } else if (reason === DisconnectReason.PARTICIPANT_REMOVED) {
+        this.onKicked('kicked');
+      }
     });
   }
 

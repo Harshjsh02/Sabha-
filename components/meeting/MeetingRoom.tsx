@@ -22,6 +22,8 @@ import { ParticipantsPanel } from './ParticipantsPanel';
 import { WhiteboardModal, WhiteboardDrawEvent } from './WhiteboardModal';
 import { HostControlModal } from './HostControlModal';
 import { ShareMeetingModal } from './ShareMeetingModal';
+import { RecordModal } from './RecordModal';
+import { LeaveMeetingModal } from './LeaveMeetingModal';
 import { ReactionsOverlay } from './ReactionsOverlay';
 import { Copy, Check, Clock, Zap, Share2 } from 'lucide-react';
 
@@ -71,12 +73,19 @@ export function MeetingRoom({
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [incomingDrawEvent, setIncomingDrawEvent] = useState<WhiteboardDrawEvent | null>(null);
 
-  // Recording State
+  // Recording State & Audio Mixing
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingAudioContextRef = useRef<AudioContext | null>(null);
+  const recordingDisplayStreamRef = useRef<MediaStream | null>(null);
+  const recordingMicStreamRef = useRef<MediaStream | null>(null);
 
   // Meeting duration timer
   const [duration, setDuration] = useState(0);
@@ -186,6 +195,15 @@ export function MeetingRoom({
               }
             };
 
+            lkManager.onKicked = (reason?: string) => {
+              if (reason === 'meeting-ended') {
+                alert('The host has ended this Sabha assembly.');
+              } else {
+                alert('You have been removed from this Sabha by the host.');
+              }
+              router.push('/');
+            };
+
             await lkManager.connect();
             const lkLocalStream = await lkManager.publishLocalTracks(
               initialParticipant.audioEnabled,
@@ -263,8 +281,12 @@ export function MeetingRoom({
           alert('You have been muted by the host.');
         };
 
-        manager.onKicked = () => {
-          alert('You have been removed from this Sabha by the host.');
+        manager.onKicked = (reason?: string) => {
+          if (reason === 'meeting-ended') {
+            alert('The host has ended this Sabha assembly.');
+          } else {
+            alert('You have been removed from this Sabha by the host.');
+          }
           router.push('/');
         };
 
@@ -631,35 +653,172 @@ export function MeetingRoom({
     });
   };
 
-  // Recording feature (In-browser MediaRecorder API)
-  const handleToggleRecording = async () => {
-    if (isRecording) {
-      // Stop Recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      setIsRecording(false);
-    } else {
+  // Stop Recording helper
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
-        const captureStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.warn('Error stopping media recorder:', err);
+      }
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setRecordingSeconds(0);
+    setIsRecording(false);
+  };
 
-        recordedChunksRef.current = [];
-        const recorder = new MediaRecorder(captureStream, {
-          mimeType: 'video/webm;codecs=vp9,opus',
-        });
+  // Toggle Recording: Open options modal or stop active recording
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      setIsRecordModalOpen(true);
+    }
+  };
 
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunksRef.current.push(event.data);
+  // Start Recording with Web Audio API multi-channel audio mixing
+  const handleStartRecording = async ({
+    includeMic,
+    includeParticipants,
+  }: {
+    includeMic: boolean;
+    includeParticipants: boolean;
+  }) => {
+    try {
+      // 1. Capture screen display (video & system audio)
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+      recordingDisplayStreamRef.current = displayStream;
+
+      const videoTrack = displayStream.getVideoTracks()[0];
+      if (!videoTrack) {
+        throw new Error('No video track available in display capture');
+      }
+
+      // 2. Set up AudioContext to mix all selected sources
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      recordingAudioContextRef.current = audioCtx;
+      const destination = audioCtx.createMediaStreamDestination();
+
+      let hasAnyAudio = false;
+
+      // 2a. System audio from display capture
+      const displayAudioTracks = displayStream.getAudioTracks();
+      if (displayAudioTracks.length > 0) {
+        try {
+          const displayAudioStream = new MediaStream(displayAudioTracks);
+          const displaySource = audioCtx.createMediaStreamSource(displayAudioStream);
+          displaySource.connect(destination);
+          hasAnyAudio = true;
+        } catch (e) {
+          console.warn('Failed to mix display audio:', e);
+        }
+      }
+
+      // 2b. Microphone audio (own voice)
+      let micStream: MediaStream | null = null;
+      if (includeMic) {
+        const existingAudioTrack = localStream?.getAudioTracks().find((t) => t.readyState === 'live');
+        if (existingAudioTrack) {
+          try {
+            const micAudioStream = new MediaStream([existingAudioTrack]);
+            const micSource = audioCtx.createMediaStreamSource(micAudioStream);
+            micSource.connect(destination);
+            hasAnyAudio = true;
+          } catch (e) {
+            console.warn('Failed to mix existing mic track:', e);
           }
-        };
+        } else {
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recordingMicStreamRef.current = micStream;
+            const micSource = audioCtx.createMediaStreamSource(micStream);
+            micSource.connect(destination);
+            hasAnyAudio = true;
+          } catch (err) {
+            console.warn('Microphone capture failed or denied:', err);
+          }
+        }
+      }
 
-        recorder.onstop = () => {
-          captureStream.getTracks().forEach((t) => t.stop());
-          const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      // 2c. Remote participants audio
+      if (includeParticipants) {
+        remoteStreams.forEach((rStream) => {
+          const remoteAudioTracks = rStream.getAudioTracks().filter((t) => t.readyState === 'live');
+          if (remoteAudioTracks.length > 0) {
+            try {
+              const remoteAudioStream = new MediaStream(remoteAudioTracks);
+              const remoteSource = audioCtx.createMediaStreamSource(remoteAudioStream);
+              remoteSource.connect(destination);
+              hasAnyAudio = true;
+            } catch (e) {
+              console.warn('Failed to mix remote audio:', e);
+            }
+          }
+        });
+      }
+
+      // 3. Assemble combined tracks for MediaRecorder
+      const combinedTracks: MediaStreamTrack[] = [videoTrack];
+      if (hasAnyAudio) {
+        const mixedAudioTrack = destination.stream.getAudioTracks()[0];
+        if (mixedAudioTrack) {
+          combinedTracks.push(mixedAudioTrack);
+        }
+      } else if (displayAudioTracks.length > 0) {
+        combinedTracks.push(displayAudioTracks[0]);
+      }
+
+      const finalStream = new MediaStream(combinedTracks);
+
+      // 4. Select best supported MIME type
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp8,opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/mp4';
+      }
+
+      recordedChunksRef.current = [];
+      const recorder = new MediaRecorder(finalStream, { mimeType });
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        // Stop all temporary capture tracks
+        displayStream.getTracks().forEach((t) => t.stop());
+        if (micStream) {
+          micStream.getTracks().forEach((t) => t.stop());
+          recordingMicStreamRef.current = null;
+        }
+        if (recordingAudioContextRef.current && recordingAudioContextRef.current.state !== 'closed') {
+          recordingAudioContextRef.current.close().catch(() => {});
+          recordingAudioContextRef.current = null;
+        }
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingSeconds(0);
+        setIsRecording(false);
+
+        // Download the recorded WebM file
+        if (recordedChunksRef.current.length > 0) {
+          const blob = new Blob(recordedChunksRef.current, { type: mimeType });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.style.display = 'none';
@@ -670,15 +829,27 @@ export function MeetingRoom({
           setTimeout(() => {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
-          }, 100);
-        };
+          }, 150);
+        }
+      };
 
-        recorder.start(1000);
-        mediaRecorderRef.current = recorder;
-        setIsRecording(true);
-      } catch (err) {
-        console.warn('Recording cancelled or not supported:', err);
-      }
+      // Native browser "Stop sharing" floating bar handler
+      videoTrack.onended = () => {
+        stopRecording();
+      };
+
+      recorder.start(1000);
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+
+      // Start recording timer
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.warn('Recording cancelled or failed:', err);
+      setIsRecording(false);
     }
   };
 
@@ -708,36 +879,54 @@ export function MeetingRoom({
   };
 
   const handleEndMeetingForAll = async () => {
-    for (const p of remoteParticipants) {
-      await rtcManagerRef.current?.sendKickCommand(p.id);
+    setIsLeaveModalOpen(false);
+    // 1. Notify server with endForAll flag (closes LiveKit room and purges Firestore room participants)
+    try {
       if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-        const payload = JSON.stringify({ roomId, participantId: p.id });
+        const payload = JSON.stringify({ roomId, participantId: localParticipant.id, endForAll: true });
         navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch('/api/room/leave', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId, participantId: localParticipant.id, endForAll: true }),
+        }).catch(() => {});
       }
-    }
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      const payload = JSON.stringify({ roomId, participantId: localParticipant.id });
-      navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
-    }
+    } catch {}
+
+    // 2. Broadcast kick/end command to all peers
+    try {
+      await rtcManagerRef.current?.sendKickCommand('broadcast', 'meeting-ended');
+      for (const p of remoteParticipants) {
+        rtcManagerRef.current?.sendKickCommand(p.id, 'meeting-ended').catch(() => {});
+      }
+    } catch {}
+
+    // 3. Disconnect local engines and navigate home
     if (liveKitManagerRef.current) {
-      await liveKitManagerRef.current.disconnect();
+      await liveKitManagerRef.current.disconnect().catch(() => {});
     }
-    await rtcManagerRef.current?.leaveRoom();
+    await rtcManagerRef.current?.leaveRoom().catch(() => {});
     router.push('/');
   };
 
   const handleLeaveMeeting = async () => {
-    if (confirm('Are you sure you want to leave the Sabha?')) {
-      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-        const payload = JSON.stringify({ roomId, participantId: localParticipant.id });
-        navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
-      }
-      if (liveKitManagerRef.current) {
-        await liveKitManagerRef.current.disconnect();
-      }
-      await rtcManagerRef.current?.leaveRoom();
-      router.push('/');
+    setIsLeaveModalOpen(false);
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      const payload = JSON.stringify({ roomId, participantId: localParticipant.id });
+      navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch('/api/room/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, participantId: localParticipant.id }),
+      }).catch(() => {});
     }
+    if (liveKitManagerRef.current) {
+      await liveKitManagerRef.current.disconnect().catch(() => {});
+    }
+    await rtcManagerRef.current?.leaveRoom().catch(() => {});
+    router.push('/');
   };
 
   const copyInviteLink = () => {
@@ -781,10 +970,19 @@ export function MeetingRoom({
           </div>
         </div>
 
-        {/* Center: Meeting Duration */}
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
-          <Clock className="w-3.5 h-3.5 text-amber-400" />
-          <span>{formatDuration(duration)}</span>
+        {/* Center: Meeting Duration & Recording Indicator */}
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span>{formatDuration(duration)}</span>
+          </div>
+          {isRecording && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-xs font-semibold text-rose-400 animate-pulse shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              <span className="font-mono">{formatDuration(recordingSeconds)}</span>
+              <span className="hidden sm:inline text-[10px] text-rose-300 font-bold">REC</span>
+            </div>
+          )}
         </div>
 
         {/* Right: Invite & Copy Clean Link */}
@@ -881,7 +1079,7 @@ export function MeetingRoom({
         onToggleWhiteboard={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
         onOpenSecurityModal={() => setIsSecurityOpen(true)}
         onSendReaction={handleSendReaction}
-        onLeaveMeeting={handleLeaveMeeting}
+        onLeaveMeeting={() => setIsLeaveModalOpen(true)}
       />
 
       {/* Interactive Modals */}
@@ -906,6 +1104,23 @@ export function MeetingRoom({
         onClose={() => setIsShareModalOpen(false)}
         roomId={roomId}
         hostName={roomSettings.hostName}
+      />
+
+      {/* Recording Audio Options Modal */}
+      <RecordModal
+        isOpen={isRecordModalOpen}
+        onClose={() => setIsRecordModalOpen(false)}
+        onStartRecording={handleStartRecording}
+        isMicAvailable={Boolean(localStream?.getAudioTracks().length)}
+      />
+
+      {/* Leave / End Sabha Confirmation Modal */}
+      <LeaveMeetingModal
+        isOpen={isLeaveModalOpen}
+        onClose={() => setIsLeaveModalOpen(false)}
+        isHost={localParticipant.isHost}
+        onLeaveMeeting={handleLeaveMeeting}
+        onEndMeetingForAll={handleEndMeetingForAll}
       />
 
       {/* Floating Emoji Reactions Layer */}
