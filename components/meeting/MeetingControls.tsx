@@ -15,12 +15,15 @@ import {
   PhoneOff,
   PenTool,
   CircleDot,
+  Loader2,
 } from 'lucide-react';
 
 interface MeetingControlsProps {
   isHost: boolean;
   audioEnabled: boolean;
   videoEnabled: boolean;
+  isTogglingAudio?: boolean;
+  isTogglingVideo?: boolean;
   screenSharing: boolean;
   isHandRaised: boolean;
   isRecording: boolean;
@@ -44,6 +47,8 @@ export function MeetingControls({
   isHost,
   audioEnabled,
   videoEnabled,
+  isTogglingAudio = false,
+  isTogglingVideo = false,
   screenSharing,
   isHandRaised,
   isRecording,
@@ -73,40 +78,74 @@ export function MeetingControls({
         {/* Microphone Toggle */}
         <button
           onClick={onToggleAudio}
+          disabled={isTogglingAudio}
           className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition ${
-            audioEnabled
+            isTogglingAudio
+              ? 'bg-slate-800/60 opacity-80 cursor-wait'
+              : audioEnabled
               ? 'text-slate-200 hover:bg-slate-800/80'
               : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
           }`}
-          title={audioEnabled ? 'Mute Microphone' : 'Unmute Microphone'}
+          title={
+            isTogglingAudio
+              ? 'Switching audio...'
+              : audioEnabled
+              ? 'Mute Microphone'
+              : 'Unmute Microphone'
+          }
         >
-          {audioEnabled ? (
+          {isTogglingAudio ? (
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 animate-spin text-amber-400" />
+          ) : audioEnabled ? (
             <Mic className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
           ) : (
             <MicOff className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
           )}
           <span className="text-[9px] sm:text-[10px] font-medium hidden xs:inline">
-            {audioEnabled ? 'Mute' : 'Unmute'}
+            {isTogglingAudio
+              ? audioEnabled
+                ? 'Muting...'
+                : 'Unmuting...'
+              : audioEnabled
+              ? 'Mute'
+              : 'Unmute'}
           </span>
         </button>
 
         {/* Video Toggle */}
         <button
           onClick={onToggleVideo}
+          disabled={isTogglingVideo}
           className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition ${
-            videoEnabled
+            isTogglingVideo
+              ? 'bg-slate-800/60 opacity-80 cursor-wait'
+              : videoEnabled
               ? 'text-slate-200 hover:bg-slate-800/80'
               : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
           }`}
-          title={videoEnabled ? 'Stop Video' : 'Start Video'}
+          title={
+            isTogglingVideo
+              ? 'Switching camera...'
+              : videoEnabled
+              ? 'Stop Video'
+              : 'Start Video'
+          }
         >
-          {videoEnabled ? (
+          {isTogglingVideo ? (
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 animate-spin text-amber-400" />
+          ) : videoEnabled ? (
             <Video className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
           ) : (
             <VideoOff className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
           )}
           <span className="text-[9px] sm:text-[10px] font-medium hidden xs:inline">
-            {videoEnabled ? 'Stop' : 'Start'}
+            {isTogglingVideo
+              ? videoEnabled
+                ? 'Stopping...'
+                : 'Starting...'
+              : videoEnabled
+              ? 'Stop'
+              : 'Start'}
           </span>
         </button>
       </div>

@@ -22,6 +22,7 @@ export class LiveKitRoomManager {
   public onActiveSpeakersChanged: (speakerIds: string[]) => void = () => {};
   public onDataReceived: (payload: any, peerId: string) => void = () => {};
   public onKicked: () => void = () => {};
+  public onLocalStreamChanged: (stream: MediaStream) => void = () => {};
 
   private remoteMediaStreams: Map<string, MediaStream> = new Map();
 
@@ -53,7 +54,9 @@ export class LiveKitRoomManager {
           this.remoteMediaStreams.set(peerId, stream);
         }
 
-        stream.addTrack(track.mediaStreamTrack);
+        if (!stream.getTracks().some((t) => t.id === track.mediaStreamTrack.id)) {
+          stream.addTrack(track.mediaStreamTrack);
+        }
         this.onRemoteStreamAdded(peerId, stream);
         this.syncParticipants();
       }
@@ -75,6 +78,32 @@ export class LiveKitRoomManager {
         this.syncParticipants();
       }
     );
+
+    // Track Muted / Unmuted (syncs remote indicators and local stream)
+    this.room.on(RoomEvent.TrackMuted, (_pub, participant) => {
+      if (participant === this.room.localParticipant) {
+        this.onLocalStreamChanged(this.getLocalStream());
+      } else {
+        this.syncParticipants();
+      }
+    });
+
+    this.room.on(RoomEvent.TrackUnmuted, (_pub, participant) => {
+      if (participant === this.room.localParticipant) {
+        this.onLocalStreamChanged(this.getLocalStream());
+      } else {
+        this.syncParticipants();
+      }
+    });
+
+    // Local track published / unpublished
+    this.room.on(RoomEvent.LocalTrackPublished, () => {
+      this.onLocalStreamChanged(this.getLocalStream());
+    });
+
+    this.room.on(RoomEvent.LocalTrackUnpublished, () => {
+      this.onLocalStreamChanged(this.getLocalStream());
+    });
 
     // Participant connected / disconnected
     this.room.on(RoomEvent.ParticipantConnected, () => {
@@ -117,16 +146,53 @@ export class LiveKitRoomManager {
     this.syncParticipants();
   }
 
-  public async publishLocalTracks(audioEnabled: boolean, videoEnabled: boolean): Promise<MediaStream> {
+  public async publishLocalTracks(
+    audioEnabled: boolean,
+    videoEnabled: boolean,
+    existingStream?: MediaStream | null
+  ): Promise<MediaStream> {
     try {
-      if (videoEnabled) {
+      const videoTrack = existingStream?.getVideoTracks().find((t) => t.readyState === 'live');
+      const audioTrack = existingStream?.getAudioTracks().find((t) => t.readyState === 'live');
+
+      if (videoTrack) {
+        videoTrack.enabled = videoEnabled;
+        await this.room.localParticipant.publishTrack(videoTrack, {
+          source: Track.Source.Camera,
+        });
+        if (!videoEnabled) {
+          const pub = this.room.localParticipant.getTrackPublication(Track.Source.Camera);
+          await pub?.mute();
+        }
+      } else if (videoEnabled) {
         await this.room.localParticipant.setCameraEnabled(true);
       }
-      if (audioEnabled) {
+
+      if (audioTrack) {
+        audioTrack.enabled = audioEnabled;
+        await this.room.localParticipant.publishTrack(audioTrack, {
+          source: Track.Source.Microphone,
+        });
+        if (!audioEnabled) {
+          const pub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+          await pub?.mute();
+        }
+      } else if (audioEnabled) {
         await this.room.localParticipant.setMicrophoneEnabled(true);
       }
     } catch (err) {
       console.warn('Initial track publication warning:', err);
+      // Graceful fallback to standard SDK methods if direct track publish failed
+      try {
+        if (videoEnabled && !this.room.localParticipant.getTrackPublication(Track.Source.Camera)) {
+          await this.room.localParticipant.setCameraEnabled(true);
+        }
+        if (audioEnabled && !this.room.localParticipant.getTrackPublication(Track.Source.Microphone)) {
+          await this.room.localParticipant.setMicrophoneEnabled(true);
+        }
+      } catch (fallbackErr) {
+        console.warn('Fallback track publication notice:', fallbackErr);
+      }
     }
 
     return this.getLocalStream();
@@ -147,6 +213,7 @@ export class LiveKitRoomManager {
       await this.room.localParticipant.setMicrophoneEnabled(enabled);
     } catch (err) {
       console.error('Error toggling microphone in LiveKit:', err);
+      throw err;
     }
     return this.getLocalStream();
   }
@@ -156,6 +223,7 @@ export class LiveKitRoomManager {
       await this.room.localParticipant.setCameraEnabled(enabled);
     } catch (err) {
       console.error('Error toggling camera in LiveKit:', err);
+      throw err;
     }
     return this.getLocalStream();
   }

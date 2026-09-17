@@ -41,12 +41,19 @@ export function VideoTile({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Check if participant has a live video track
+  const hasLiveVideoTrack = Boolean(
+    participant.videoEnabled &&
+      stream &&
+      stream.getVideoTracks().some((t) => t.readyState === 'live')
+  );
+
   // Attach stream to HTMLVideoElement and ensure playback
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl) return;
 
-    if (stream && participant.videoEnabled) {
+    if (hasLiveVideoTrack && stream) {
       if (videoEl.srcObject !== stream) {
         videoEl.srcObject = stream;
       }
@@ -54,7 +61,7 @@ export function VideoTile({
         console.warn('Video playback notice:', err);
       });
     }
-  }, [stream, participant.videoEnabled]);
+  }, [stream, hasLiveVideoTrack]);
 
   // Active speaker detection
   useEffect(() => {
@@ -96,12 +103,12 @@ export function VideoTile({
         playsInline
         muted={isLocal}
         className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''} ${
-          participant.videoEnabled && stream ? 'block' : 'hidden'
+          hasLiveVideoTrack ? 'block' : 'hidden'
         }`}
       />
 
       {/* Avatar Fallback */}
-      {(!participant.videoEnabled || !stream) && (
+      {!hasLiveVideoTrack && (
         <div className="flex flex-col items-center justify-center p-4">
           <div className="relative">
             {participant.photoURL ? (

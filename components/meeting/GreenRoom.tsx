@@ -123,12 +123,17 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
       audioContextRef.current.close();
     }
 
-    // Stop the preview tracks to free the mic/cam hardware locks for the meeting room
+    // Sync track enabled states with user selection and pass active stream to MeetingRoom
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = audioEnabled;
+      });
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = videoEnabled;
+      });
     }
 
-    onJoin(user.displayName, audioEnabled, videoEnabled, null);
+    onJoin(user.displayName, audioEnabled, videoEnabled, stream);
   };
 
   return (
