@@ -44,6 +44,7 @@ export class WebRTCManager {
   public onParticipantsChanged: (participants: Participant[]) => void = () => {};
   public onMuteRequested: () => void = () => {};
   public onKicked: () => void = () => {};
+  public onWhiteboardReceived: (event: any) => void = () => {};
 
   // Cleanups
   private unsubParticipants: (() => void) | null = null;
@@ -67,15 +68,34 @@ export class WebRTCManager {
 
     // Update tracks for existing peer connections
     this.peerConnections.forEach((pc) => {
-      const senders = pc.getSenders();
       stream.getTracks().forEach((track) => {
-        const sender = senders.find((s) => s.track && s.track.kind === track.kind);
+        const sender =
+          pc.getSenders().find((s) => s.track && s.track.kind === track.kind) ||
+          pc.getSenders().find((s) => !s.track && (s as any).kind === track.kind) ||
+          pc.getTransceivers().find(
+            (t) =>
+              (t.sender.track && t.sender.track.kind === track.kind) ||
+              (t.receiver.track && t.receiver.track.kind === track.kind)
+          )?.sender;
+
         if (sender) {
           sender.replaceTrack(track);
         } else {
-          pc.addTrack(track, stream);
+          try {
+            pc.addTrack(track, stream);
+          } catch (err) {
+            console.warn('WebRTC addTrack notice:', err);
+          }
         }
       });
+
+      // If video track was removed or empty, replace video sender with null
+      if (stream.getVideoTracks().length === 0) {
+        const videoSender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          videoSender.replaceTrack(null);
+        }
+      }
     });
   }
 
@@ -184,11 +204,24 @@ export class WebRTCManager {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     this.peerConnections.set(peerId, pc);
 
-    // Add local tracks
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
-      });
+    // Ensure both audio and video tracks or transceivers are present so SDP negotiates both bidirectional m-lines upfront
+    const audioTrack = this.localStream?.getAudioTracks()[0];
+    const videoTrack = this.localStream?.getVideoTracks()[0];
+
+    if (audioTrack) {
+      pc.addTrack(audioTrack, this.localStream!);
+    } else {
+      try {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+      } catch {}
+    }
+
+    if (videoTrack) {
+      pc.addTrack(videoTrack, this.localStream!);
+    } else {
+      try {
+        pc.addTransceiver('video', { direction: 'sendrecv' });
+      } catch {}
     }
 
     // Handle remote tracks
@@ -202,6 +235,38 @@ export class WebRTCManager {
       }
       this.remoteStreams.set(peerId, stream);
       this.onRemoteStreamAdded(peerId, new MediaStream(stream.getTracks()));
+
+      event.track.onended = () => {
+        const curr = this.remoteStreams.get(peerId);
+        if (curr) {
+          this.onRemoteStreamAdded(peerId, new MediaStream(curr.getTracks()));
+        }
+      };
+
+      event.track.onunmute = () => {
+        const curr = this.remoteStreams.get(peerId);
+        if (curr) {
+          this.onRemoteStreamAdded(peerId, new MediaStream(curr.getTracks()));
+        }
+      };
+    };
+
+    // Renegotiation handler for dynamically added tracks
+    pc.onnegotiationneeded = async () => {
+      try {
+        if (pc.signalingState !== 'stable') return;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await this.sendSignal({
+          from: this.localParticipant.id,
+          to: peerId,
+          type: 'offer',
+          payload: offer,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.warn('Renegotiation notice for peer', peerId, err);
+      }
     };
 
     // ICE candidates
@@ -288,6 +353,11 @@ export class WebRTCManager {
 
     if (signal.type === 'kick-command') {
       this.onKicked();
+      return;
+    }
+
+    if ((signal.type as any) === 'whiteboard') {
+      this.onWhiteboardReceived(signal.payload);
       return;
     }
 
@@ -397,6 +467,16 @@ export class WebRTCManager {
         await deleteDoc(participantRef);
       } catch {}
     }
+  }
+
+  public async sendWhiteboardEvent(payload: any) {
+    await this.sendSignal({
+      from: this.localParticipant.id,
+      to: 'broadcast',
+      type: 'whiteboard' as any,
+      payload,
+      timestamp: Date.now(),
+    });
   }
 
   public async updateParticipantState(updates: Partial<Participant>) {

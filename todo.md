@@ -5,11 +5,16 @@
 ---
 
 ## 🎯 Recently Completed
+- [x] Fixed screen sharing fallback in WebRTC Mesh mode (`navigator.mediaDevices.getDisplayMedia`) with browser `onended` track restoration.
+- [x] Fixed zombie LiveKit ref bug: gated assignment and safely disconnected on 401 Unauthorized / errors to allow automatic WebRTC Mesh fallback.
+- [x] Added bidirectional transceiver pre-negotiation (`audio` & `video` sendrecv) in `WebRTCManager` for instant 0ms camera/screen swapping via `replaceTrack`.
+- [x] Fixed screen presentation spotlight in `VideoGrid.tsx` for both LiveKit SFU and WebRTC Mesh modes.
+- [x] Responsive "Share Screen" button in `MeetingControls.tsx` for all screen dimensions.
+- [x] Serverless departure beacon (`/api/room/leave`) and 15-second stale heartbeat pruning for tab/browser closes.
 - [x] Complete enterprise-grade documentation suite (`docs/PRD.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/API_SPEC.md`, `docs/DATABASE.md`, `docs/SECURITY.md`, etc.).
 - [x] Create comprehensive task breakdown (`tasks.md`) matching project architecture.
 - [x] Add copy button with visual checkmark animation and clean meeting invite URL sharing (`/room/[roomId]`).
 - [x] Implement Spotlight Presentation Stage in `VideoGrid.tsx` with high-fidelity `object-contain` video rendering.
-- [x] Wire LiveKit SFU dedicated screen sharing routing (`onRemoteScreenStreamAdded` / `onRemoteScreenStreamRemoved`).
 - [x] Enforce mandatory Google authentication with locked display names and login IP auditing (`/api/auth/record-login`).
 - [x] Resolve Android Brave / mobile hardware locks in `GreenRoom.tsx` and eliminate disruptive in-call `alert()` dialogs.
 - [x] True Firestore database host verification (`room.hostId === user.uid`) replacing insecure query params.

@@ -65,9 +65,21 @@
 
 ---
 
-## Sprint 7: Future Enhancements & Scalability (Roadmap)
-- [ ] **TASK-701:** Implement virtual background blurring and custom image replacement via MediaPipe Selfie Segmentation.
-- [ ] **TASK-702:** Add AI-powered automated live meeting transcription using Web Speech API or Gemini Flash.
-- [ ] **TASK-703:** Implement Breakout Rooms feature with independent Firestore sub-channel rooms.
-- [ ] **TASK-704:** Support mobile-responsive portrait HUD optimizations for smartphone browsers.
-- [ ] **TASK-705:** Add end-of-meeting summary notes export (Markdown format).
+## Sprint 7: WebRTC Mesh Resilience, Zero-Lag Toggles & Screen Sharing (Completed)
+- [x] **TASK-701:** Fix zombie LiveKit connection bug by strictly gating `liveKitManagerRef` assignment to successful connections and cleaning up on 401 Unauthorized / errors.
+- [x] **TASK-702:** Implement native WebRTC Mesh screen sharing fallback via `navigator.mediaDevices.getDisplayMedia` with active camera stream preservation and clean browser `onended` track restoration.
+- [x] **TASK-703:** Pre-allocate bidirectional audio and video transceivers (`sendrecv`) during `createPeerConnection` in `lib/webrtc.ts` to ensure video m-lines are negotiated upfront even if camera is initially off.
+- [x] **TASK-704:** Enable seamless 0ms camera/screen swapping via `sender.replaceTrack(track)` matching across RTCRtpSenders and RTCRtpTransceivers.
+- [x] **TASK-705:** Update `VideoGrid.tsx` to detect and spotlight remote screen presenters in both LiveKit SFU and WebRTC Mesh modes.
+- [x] **TASK-706:** Refine `VideoTile.tsx` to cleanly toggle between avatar initials and active video stream without displaying blank/black video tiles.
+- [x] **TASK-707:** Make Screen Share control button fully responsive and visible across all viewport dimensions in `MeetingControls.tsx`.
+- [x] **TASK-708:** Wire up peer-to-peer Whiteboard stroke broadcasting in WebRTC Mesh mode (`manager.sendWhiteboardEvent` and `manager.onWhiteboardReceived`).
+
+---
+
+## Sprint 8: Future Enhancements & Scalability (Roadmap)
+- [ ] **TASK-801:** Implement virtual background blurring and custom image replacement via MediaPipe Selfie Segmentation.
+- [ ] **TASK-802:** Add AI-powered automated live meeting transcription using Web Speech API or Gemini Flash.
+- [ ] **TASK-803:** Implement Breakout Rooms feature with independent Firestore sub-channel rooms.
+- [ ] **TASK-804:** Support mobile-responsive portrait HUD optimizations for smartphone browsers.
+- [ ] **TASK-805:** Add end-of-meeting summary notes export (Markdown format).

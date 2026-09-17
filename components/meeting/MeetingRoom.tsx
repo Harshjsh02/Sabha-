@@ -91,6 +91,7 @@ export function MeetingRoom({
 
   const rtcManagerRef = useRef<WebRTCManager | null>(null);
   const liveKitManagerRef = useRef<LiveKitRoomManager | null>(null);
+  const activeCameraStreamRef = useRef<MediaStream | null>(initialStream || null);
 
   // Initialize Room & Media Engine
   useEffect(() => {
@@ -136,7 +137,6 @@ export function MeetingRoom({
             const cleanWsUrl = (data.wsUrl || '').trim();
             const cleanToken = (data.token || '').trim();
             const lkManager = new LiveKitRoomManager(cleanWsUrl, cleanToken, initialParticipant);
-            liveKitManagerRef.current = lkManager;
 
             lkManager.onRemoteStreamAdded = (peerId, stream) => {
               setRemoteStreams((prev) => new Map(prev).set(peerId, new MediaStream(stream.getTracks())));
@@ -197,12 +197,19 @@ export function MeetingRoom({
               setLocalStream(lkLocalStream);
             }
 
+            liveKitManagerRef.current = lkManager;
             setIsLiveKitSFU(true);
             connectedViaLiveKit = true;
           }
         }
       } catch (err) {
-        console.warn('LiveKit SFU connection attempt returned:', err);
+        console.warn('LiveKit SFU connection attempt returned, falling back to WebRTC Mesh:', err);
+        if (liveKitManagerRef.current) {
+          liveKitManagerRef.current.disconnect().catch(() => {});
+          liveKitManagerRef.current = null;
+        }
+        setIsLiveKitSFU(false);
+        connectedViaLiveKit = false;
       }
 
       // 3. Fallback to WebRTC Mesh if LiveKit is not configured or fails
@@ -226,6 +233,7 @@ export function MeetingRoom({
         }
 
         if (meshStream) {
+          activeCameraStreamRef.current = meshStream;
           manager.setLocalStream(meshStream);
         }
 
@@ -258,6 +266,10 @@ export function MeetingRoom({
         manager.onKicked = () => {
           alert('You have been removed from this Sabha by the host.');
           router.push('/');
+        };
+
+        manager.onWhiteboardReceived = (event) => {
+          setIncomingDrawEvent(event);
         };
 
         await manager.joinRoom();
@@ -332,9 +344,6 @@ export function MeetingRoom({
       return;
     }
 
-    isTogglingAudioRef.current = true;
-    setIsTogglingAudio(true);
-
     const nextState = !localParticipant.audioEnabled;
 
     // 1. Optimistic UI update (0ms instant feedback)
@@ -348,10 +357,45 @@ export function MeetingRoom({
     setIsTogglingAudio(true);
 
     try {
-      if (liveKitManagerRef.current) {
+      if (isLiveKitSFU && liveKitManagerRef.current) {
         const updatedStream = await liveKitManagerRef.current.setAudioEnabled(nextState);
         if (updatedStream && updatedStream.getTracks().length > 0) {
           setLocalStream(new MediaStream(updatedStream.getTracks()));
+        }
+      } else {
+        // WebRTC Mesh mode
+        let activeStream = localStream;
+        const liveAudioTrack = activeStream?.getAudioTracks().find((t) => t.readyState === 'live');
+
+        if (nextState) {
+          if (liveAudioTrack) {
+            liveAudioTrack.enabled = true;
+            setLocalStream(new MediaStream(activeStream!.getTracks()));
+            rtcManagerRef.current?.setLocalStream(activeStream!);
+          } else {
+            try {
+              const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              const newAudioTrack = micStream.getAudioTracks()[0];
+              if (newAudioTrack) {
+                newAudioTrack.enabled = true;
+                const tracks = activeStream ? activeStream.getTracks().filter((t) => t.kind !== 'audio') : [];
+                tracks.push(newAudioTrack);
+                const combinedStream = new MediaStream(tracks);
+                setLocalStream(combinedStream);
+                rtcManagerRef.current?.setLocalStream(combinedStream);
+              }
+            } catch (mediaErr) {
+              console.warn('Microphone permission or device error:', mediaErr);
+              setLocalParticipant((p) => ({ ...p, audioEnabled: false }));
+              return;
+            }
+          }
+        } else {
+          if (liveAudioTrack) {
+            liveAudioTrack.enabled = false;
+            setLocalStream(new MediaStream(activeStream!.getTracks()));
+            rtcManagerRef.current?.setLocalStream(activeStream!);
+          }
         }
       }
       rtcManagerRef.current?.updateParticipantState({ audioEnabled: nextState });
@@ -375,7 +419,7 @@ export function MeetingRoom({
             localStream.getVideoTracks().forEach((t) => (t.enabled = true));
             setLocalStream(new MediaStream(localStream.getTracks()));
           }
-          if (liveKitManagerRef.current) {
+          if (isLiveKitSFU && liveKitManagerRef.current) {
             const updatedStream = await liveKitManagerRef.current.setVideoEnabled(true);
             if (updatedStream && updatedStream.getTracks().length > 0) {
               setLocalStream(new MediaStream(updatedStream.getTracks()));
@@ -388,7 +432,7 @@ export function MeetingRoom({
       };
       enableVideoAutomatically();
     }
-  }, [roomSettings.requireVideo, localParticipant.isHost, localParticipant.videoEnabled]);
+  }, [roomSettings.requireVideo, localParticipant.isHost, localParticipant.videoEnabled, isLiveKitSFU, localStream]);
 
   // Toggle Video
   const handleToggleVideo = async () => {
@@ -412,10 +456,49 @@ export function MeetingRoom({
     setIsTogglingVideo(true);
 
     try {
-      if (liveKitManagerRef.current) {
+      if (isLiveKitSFU && liveKitManagerRef.current) {
         const updatedStream = await liveKitManagerRef.current.setVideoEnabled(nextState);
         if (updatedStream && updatedStream.getTracks().length > 0) {
           setLocalStream(new MediaStream(updatedStream.getTracks()));
+        }
+      } else {
+        // WebRTC Mesh mode
+        let activeStream = localStream;
+        const liveVideoTrack = activeStream?.getVideoTracks().find((t) => t.readyState === 'live');
+
+        if (nextState) {
+          if (liveVideoTrack) {
+            liveVideoTrack.enabled = true;
+            setLocalStream(new MediaStream(activeStream!.getTracks()));
+            activeCameraStreamRef.current = activeStream;
+            rtcManagerRef.current?.setLocalStream(activeStream!);
+          } else {
+            try {
+              const camStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 1280, height: 720 },
+              });
+              const newVideoTrack = camStream.getVideoTracks()[0];
+              if (newVideoTrack) {
+                newVideoTrack.enabled = true;
+                const tracks = activeStream ? activeStream.getTracks().filter((t) => t.kind !== 'video') : [];
+                tracks.push(newVideoTrack);
+                const combinedStream = new MediaStream(tracks);
+                setLocalStream(combinedStream);
+                activeCameraStreamRef.current = combinedStream;
+                rtcManagerRef.current?.setLocalStream(combinedStream);
+              }
+            } catch (mediaErr) {
+              console.warn('Camera permission or device error:', mediaErr);
+              setLocalParticipant((p) => ({ ...p, videoEnabled: false }));
+              return;
+            }
+          }
+        } else {
+          if (liveVideoTrack) {
+            liveVideoTrack.enabled = false;
+            setLocalStream(new MediaStream(activeStream!.getTracks()));
+            rtcManagerRef.current?.setLocalStream(activeStream!);
+          }
         }
       }
       rtcManagerRef.current?.updateParticipantState({ videoEnabled: nextState });
@@ -437,22 +520,30 @@ export function MeetingRoom({
     }
 
     if (localParticipant.screenSharing) {
-      // Stop sharing
-      if (liveKitManagerRef.current) {
+      // --- STOP SHARING ---
+      if (isLiveKitSFU && liveKitManagerRef.current) {
         await liveKitManagerRef.current.setScreenShareEnabled(false);
       }
       if (screenStream) {
         screenStream.getTracks().forEach((t) => t.stop());
         setScreenStream(null);
       }
-      if (liveKitManagerRef.current) {
+      if (isLiveKitSFU && liveKitManagerRef.current) {
         setLocalStream(liveKitManagerRef.current.getLocalStream());
+      } else {
+        // Restore local camera / audio stream in WebRTC mesh mode
+        const streamToRestore = activeCameraStreamRef.current || initialStream;
+        if (streamToRestore) {
+          rtcManagerRef.current?.setLocalStream(streamToRestore);
+          setLocalStream(streamToRestore);
+        }
       }
       setLocalParticipant((p) => ({ ...p, screenSharing: false }));
       rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
     } else {
+      // --- START SHARING ---
       try {
-        if (liveKitManagerRef.current) {
+        if (isLiveKitSFU && liveKitManagerRef.current) {
           const lkScreen = await liveKitManagerRef.current.setScreenShareEnabled(true);
           if (lkScreen) {
             setScreenStream(lkScreen);
@@ -467,10 +558,16 @@ export function MeetingRoom({
             }
           }
         } else {
+          // WebRTC Mesh mode (direct browser getDisplayMedia)
           const stream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true,
           });
+
+          // Remember current camera stream so we can cleanly revert when screen share ends
+          if (localStream && !screenStream) {
+            activeCameraStreamRef.current = localStream;
+          }
 
           setScreenStream(stream);
           rtcManagerRef.current?.setLocalStream(stream);
@@ -478,10 +575,12 @@ export function MeetingRoom({
           setLocalParticipant((p) => ({ ...p, screenSharing: true }));
           rtcManagerRef.current?.updateParticipantState({ screenSharing: true });
 
+          // Browser native "Stop Sharing" floating bar handler
           stream.getVideoTracks()[0].onended = () => {
-            if (initialStream) {
-              rtcManagerRef.current?.setLocalStream(initialStream);
-              setLocalStream(initialStream);
+            const streamToRestore = activeCameraStreamRef.current || initialStream;
+            if (streamToRestore) {
+              rtcManagerRef.current?.setLocalStream(streamToRestore);
+              setLocalStream(streamToRestore);
             }
             setScreenStream(null);
             setLocalParticipant((p) => ({ ...p, screenSharing: false }));
@@ -496,11 +595,13 @@ export function MeetingRoom({
 
   // Broadcast Whiteboard stroke / clear
   const handleBroadcastDraw = (drawEvent: WhiteboardDrawEvent) => {
-    if (liveKitManagerRef.current) {
+    if (isLiveKitSFU && liveKitManagerRef.current) {
       liveKitManagerRef.current.sendData({
         type: 'whiteboard',
         event: drawEvent,
       });
+    } else {
+      rtcManagerRef.current?.sendWhiteboardEvent(drawEvent);
     }
   };
 

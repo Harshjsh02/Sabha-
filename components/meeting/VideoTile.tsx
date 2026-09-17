@@ -44,8 +44,9 @@ export function VideoTile({
   // Check if participant has a live video track
   const hasLiveVideoTrack = Boolean(
     stream &&
+      (participant.videoEnabled || participant.screenSharing) &&
       stream.getVideoTracks().some(
-        (t) => t.readyState === 'live' && t.enabled && (!isLocal || participant.videoEnabled)
+        (t) => t.readyState === 'live' && (isLocal ? t.enabled : true)
       )
   );
 

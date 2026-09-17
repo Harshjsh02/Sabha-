@@ -192,18 +192,18 @@ export function MeetingControls({
           )}
         </button>
 
-        {/* Share Screen (Desktop/Tablet) */}
+        {/* Share Screen */}
         <button
           onClick={onToggleScreenShare}
-          className={`hidden sm:flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${
+          className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition cursor-pointer ${
             screenSharing
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
               : 'text-slate-200 hover:bg-slate-800/80'
           }`}
           title={screenSharing ? 'Stop Screen Share' : 'Share Screen'}
         >
-          <ScreenShare className="w-5 h-5 mb-1 text-emerald-400" />
-          <span className="text-[10px] font-medium">{screenSharing ? 'Sharing' : 'Share'}</span>
+          <ScreenShare className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 text-emerald-400" />
+          <span className="text-[9px] sm:text-[10px] font-medium hidden xs:inline">{screenSharing ? 'Sharing' : 'Share'}</span>
         </button>
 
         {/* Whiteboard */}

@@ -130,20 +130,26 @@ export function VideoGrid({
   // Check if anyone is presenting their screen
   const isLocalScreenSharing = Boolean(localParticipant.screenSharing && screenStream);
   const remoteScreenPresenter =
-    remoteParticipants.find((p) => p.screenSharing && remoteScreenStreams?.has(p.id)) ||
+    remoteParticipants.find(
+      (p) => p.screenSharing && ((remoteScreenStreams && remoteScreenStreams.has(p.id)) || remoteStreams.has(p.id))
+    ) ||
     (remoteScreenStreams && remoteScreenStreams.size > 0
       ? remoteParticipants.find((p) => remoteScreenStreams.has(p.id))
       : undefined);
 
+  const remoteScreenStream = remoteScreenPresenter
+    ? (remoteScreenStreams && remoteScreenStreams.get(remoteScreenPresenter.id)) ||
+      remoteStreams.get(remoteScreenPresenter.id) ||
+      null
+    : null;
+
   const isScreenSharingActive = Boolean(
-    isLocalScreenSharing || (remoteScreenPresenter && remoteScreenStreams?.get(remoteScreenPresenter.id))
+    isLocalScreenSharing || (remoteScreenPresenter && remoteScreenStream)
   );
 
   const presentationStream = isLocalScreenSharing
     ? screenStream
-    : remoteScreenPresenter
-    ? remoteScreenStreams?.get(remoteScreenPresenter.id) || null
-    : null;
+    : remoteScreenStream;
 
   const presenter = isLocalScreenSharing
     ? localParticipant
