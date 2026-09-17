@@ -78,18 +78,18 @@ Modern video collaboration tools (Zoom, Microsoft Teams, Google Meet, Webex) dom
 
 ### 4.1 Pre-Meeting: Green Room Lobby
 - **FR-101 (Device Permissions):** Request camera/microphone permissions explicitly with graceful degradation and instructional error alerts if blocked.
-- **FR-102 (Live Video Preview):** Mirrored real-time webcam preview prior to room connection.
+- **FR-102 (Live Video Preview):** Mirrored real-time webcam preview prior to room connection; explicitly releases hardware handles on join to prevent mobile Android locks.
 - **FR-103 (Audio Visualizer):** Real-time decibel meter bar showing microphone sensitivity and input volume.
-- **FR-104 (Identity Customization):** Allow display name entry for anonymous guests, pre-filling Google profile name for authenticated users.
+- **FR-104 (Mandatory Google Authentication & Verified Profiles):** Enforce Google OAuth authentication before meeting access. Automatically lock display name and photo to the verified Google profile, preventing identity spoofing.
 
 ### 4.2 Core Meeting Engine & Media Orchestration
 - **FR-201 (Hybrid Connection Strategy):**
   1. Check for LiveKit Server availability via `/api/livekit-token`. If available, connect to LiveKit SFU.
   2. If LiveKit credentials are absent, automatically fall back to browser-to-browser WebRTC mesh using Firestore signaling and STUN servers.
   3. If multi-tab testing on the same machine, use `BroadcastChannel` for ultra-low latency signaling.
-- **FR-202 (Adaptive Video Grid):** Automatically restructure grid tiles (1, 2, 3–4, 5–6, 7–12 participants) with CSS Grid `minmax` ensuring equal visual weight and spotlight for screenshares.
+- **FR-202 (Adaptive Video Grid):** Automatically restructure grid tiles (1, 2, 3–4, 5–6, 7–12 participants) with CSS Grid `minmax` ensuring equal visual weight.
 - **FR-203 (Active Speaker Detection):** Audio level sampling at 50ms intervals via `AudioContext` and `AnalyserNode`. Apply emerald glowing ring (`ring-2 ring-emerald-500`) around active speaker's video tile.
-- **FR-204 (HD Screen Sharing):** Screen stream capture via `navigator.mediaDevices.getDisplayMedia` with system audio. Replace local video track or publish auxiliary track seamlessly.
+- **FR-204 (HD Screen Sharing & Spotlight Presentation Stage):** Screen stream capture via `navigator.mediaDevices.getDisplayMedia` or LiveKit SFU. Transitions layout into a dedicated `ScreenPresentationStage` featuring CSS `object-contain` for maximum slide/code crispness, presenter identification badge, participant filmstrip, and local "Stop Sharing" button.
 
 ### 4.3 Host (सभापति) Administration & Security
 - **FR-301 (Mute All):** Host broadcasts global mute command; remote participants' audio tracks are muted instantly.
@@ -97,6 +97,10 @@ Modern video collaboration tools (Zoom, Microsoft Teams, Google Meet, Webex) dom
 - **FR-303 (Kick Participant):** Host issues disconnect signal; target client terminates peer connection and redirects to landing page.
 - **FR-304 (Lock Sabha):** Prevents new joiners from entering the room after meeting begins.
 - **FR-305 (Permission Toggles):** Host toggles dynamic room permissions: `allowScreenShare`, `allowChat`, `allowUnmute`.
+- **FR-306 (True Database Host Verification):** Host identity is verified against Firestore document ownership (`room.hostId === user.uid`), eliminating insecure `?host=true` URL query leaks.
+- **FR-307 (Clean Invite Sharing):** All meeting links use clean `/room/[roomId]` paths. Integrated `ShareMeetingModal` supports native Web Share API, WhatsApp sharing, and animated 1-click clipboard copying.
+- **FR-308 (Host-Enforced Video):** Host can require all participants to turn on webcams (`requireVideo`), preventing video blackout during critical assemblies.
+- **FR-309 (Participant Login Auditing):** `/api/auth/record-login` endpoint records participant IP addresses, user agent strings, and login timestamps to Firestore `/users/{uid}/loginHistory`.
 
 ### 4.4 Collaboration & Productivity
 - **FR-401 (Zero-Cost Meeting Recording):** Uses `MediaRecorder` API to capture mixed streams or screen display into WebM blobs. Downloadable locally upon stopping recording with zero cloud storage costs.

@@ -44,6 +44,7 @@ export function MeetingRoom({
   const [remoteParticipants, setRemoteParticipants] = useState<Participant[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState<Map<string, MediaStream>>(new Map());
 
   // Room settings & Realtime data
   const [roomSettings, setRoomSettings] = useState<RoomSettings>({
@@ -147,6 +148,24 @@ export function MeetingRoom({
               });
             };
 
+            // Dedicated screen sharing stream subscriptions
+            lkManager.onRemoteScreenStreamAdded = (peerId, stream) => {
+              setRemoteScreenStreams((prev) => new Map(prev).set(peerId, stream));
+            };
+
+            lkManager.onRemoteScreenStreamRemoved = (peerId) => {
+              setRemoteScreenStreams((prev) => {
+                const next = new Map(prev);
+                next.delete(peerId);
+                return next;
+              });
+            };
+
+            lkManager.onLocalScreenShareStopped = () => {
+              setScreenStream(null);
+              setLocalParticipant((p) => ({ ...p, screenSharing: false }));
+            };
+
             lkManager.onParticipantsChanged = (participants) => {
               setRemoteParticipants(participants);
             };
@@ -168,8 +187,7 @@ export function MeetingRoom({
             await lkManager.connect();
             const lkLocalStream = await lkManager.publishLocalTracks(
               initialParticipant.audioEnabled,
-              initialParticipant.videoEnabled,
-              initialStream
+              initialParticipant.videoEnabled
             );
 
             if (lkLocalStream && lkLocalStream.getTracks().length > 0) {
@@ -189,8 +207,23 @@ export function MeetingRoom({
         const manager = new WebRTCManager(roomId, initialParticipant);
         rtcManagerRef.current = manager;
 
-        if (initialStream) {
-          manager.setLocalStream(initialStream);
+        let meshStream = initialStream;
+        if (!meshStream || meshStream.getTracks().every((t) => t.readyState === 'ended')) {
+          try {
+            meshStream = await navigator.mediaDevices.getUserMedia({
+              audio: initialParticipant.audioEnabled,
+              video: initialParticipant.videoEnabled ? { width: 1280, height: 720 } : false,
+            });
+            if (active) {
+              setLocalStream(meshStream);
+            }
+          } catch (err) {
+            console.warn('Fallback WebRTC getUserMedia failed:', err);
+          }
+        }
+
+        if (meshStream) {
+          manager.setLocalStream(meshStream);
         }
 
         manager.onRemoteStreamAdded = (peerId, stream) => {
@@ -303,8 +336,7 @@ export function MeetingRoom({
       setLocalParticipant((p) => ({ ...p, audioEnabled: nextState }));
       rtcManagerRef.current?.updateParticipantState({ audioEnabled: nextState });
     } catch (err) {
-      console.error('Error toggling microphone:', err);
-      alert('Unable to access microphone. Please check your browser microphone permissions.');
+      console.warn('Microphone toggle warning:', err);
     } finally {
       isTogglingAudioRef.current = false;
       setIsTogglingAudio(false);
@@ -325,7 +357,6 @@ export function MeetingRoom({
           }
           setLocalParticipant((p) => ({ ...p, videoEnabled: true }));
           rtcManagerRef.current?.updateParticipantState({ videoEnabled: true });
-          alert('The host (सभापति) has required all participants to keep their camera turned on.');
         } catch (err) {
           console.warn('Auto enable video failed:', err);
         }
@@ -360,8 +391,7 @@ export function MeetingRoom({
       setLocalParticipant((p) => ({ ...p, videoEnabled: nextState }));
       rtcManagerRef.current?.updateParticipantState({ videoEnabled: nextState });
     } catch (err) {
-      console.error('Error toggling camera:', err);
-      alert('Unable to access camera. Please check your browser camera permissions or ensure another app is not using it.');
+      console.warn('Camera toggle warning:', err);
     } finally {
       isTogglingVideoRef.current = false;
       setIsTogglingVideo(false);
@@ -395,8 +425,16 @@ export function MeetingRoom({
           const lkScreen = await liveKitManagerRef.current.setScreenShareEnabled(true);
           if (lkScreen) {
             setScreenStream(lkScreen);
+            setLocalParticipant((p) => ({ ...p, screenSharing: true }));
+            const track = lkScreen.getVideoTracks()[0];
+            if (track) {
+              track.onended = () => {
+                liveKitManagerRef.current?.setScreenShareEnabled(false);
+                setScreenStream(null);
+                setLocalParticipant((p) => ({ ...p, screenSharing: false }));
+              };
+            }
           }
-          setLocalParticipant((p) => ({ ...p, screenSharing: true }));
         } else {
           const stream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
@@ -630,6 +668,9 @@ export function MeetingRoom({
           localStream={localStream}
           remoteParticipants={remoteParticipants}
           remoteStreams={remoteStreams}
+          screenStream={screenStream}
+          remoteScreenStreams={remoteScreenStreams}
+          onStopScreenShare={handleToggleScreenShare}
           isHostViewer={localParticipant.isHost}
           onMuteParticipant={handleMuteParticipant}
           onKickParticipant={handleKickParticipant}

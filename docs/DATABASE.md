@@ -23,6 +23,7 @@ erDiagram
     ROOMS ||--o{ MESSAGES : "receives"
     ROOMS ||--o{ REACTIONS : "broadcasts"
     ROOMS ||--o{ SIGNALS : "exchanges"
+    USERS ||--o{ LOGIN_HISTORY : "tracks"
 
     ROOMS {
         string roomId PK
@@ -30,11 +31,28 @@ erDiagram
         string hostName
         string title
         boolean isLocked
+        boolean requireVideo
         boolean allowScreenShare
         boolean allowChat
         boolean allowUnmute
         number createdAt
         number endedAt
+    }
+
+    USERS {
+        string uid PK
+        string email
+        string displayName
+        string photoURL
+        number lastLoginAt
+        string lastLoginIp
+    }
+
+    LOGIN_HISTORY {
+        string loginId PK
+        string ip
+        string userAgent
+        number timestamp
     }
 
     PARTICIPANTS {
@@ -95,6 +113,7 @@ erDiagram
 | `hostName` | `string` | No | Name of the room creator |
 | `title` | `string` | No | Meeting title |
 | `isLocked` | `boolean`| No | Prevents new users from joining |
+| `requireVideo`| `boolean`| No | Host mandates all webcams remain active |
 | `allowScreenShare`| `boolean`| No | Host permission toggle |
 | `allowChat` | `boolean`| No | Host permission toggle |
 | `allowUnmute` | `boolean`| No | Host permission toggle |
@@ -137,6 +156,28 @@ erDiagram
 ### 3.4 Sub-Collection: `rooms/{roomId}/signals`
 - **Document ID:** Auto-generated Firestore ID
 - **Lifecycle:** Transient signaling messages (SDP offers/answers, ICE candidates, mute commands). Cleaned up post-meeting.
+
+### 3.5 Collection: `users` & Sub-Collection: `loginHistory`
+- **Document ID:** `{uid}` (Firebase Google Auth UID)
+- **Lifecycle:** Created or updated upon sign-in; maintains user profile and device audit trail.
+
+| Field Name | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `uid` | `string` | No | Firebase Auth UID |
+| `email` | `string` | No | Verified Google account email |
+| `displayName` | `string` | No | Verified Google profile name |
+| `photoURL` | `string` | Yes | Verified Google profile photo |
+| `lastLoginAt` | `number` | No | Epoch timestamp of latest login |
+| `lastLoginIp` | `string` | No | Public IP address recorded at login |
+
+#### Sub-Collection: `users/{uid}/loginHistory`
+- **Document ID:** Auto-generated Firestore ID
+
+| Field Name | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `ip` | `string` | No | Client IP address recorded by server |
+| `userAgent` | `string` | No | Browser User-Agent header |
+| `timestamp` | `number` | No | Epoch timestamp in milliseconds |
 
 ---
 

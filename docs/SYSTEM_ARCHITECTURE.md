@@ -50,12 +50,12 @@ Sabha is architected around a **Dual-Tier Real-Time Topology** designed for maxi
 +-----------------------------+       +---------------------------------------------+
 |    VERCEL SERVERLESS API    |       |              FIREBASE SERVICES              |
 |                             |       |                                             |
-|  - GET /api/livekit-token   |       |  - Firebase Authentication (Google & Guest) |
-|    (Signs JWT tokens with   |       |  - Cloud Firestore Real-Time Signaling      |
+|  - GET /api/livekit-token   |       |  - Firebase Google Authentication           |
+|    (Signs JWT tokens with   |       |  - Cloud Firestore Real-Time Storage:       |
 |     API Secret & Grants)    |       |    - /rooms/{roomId}/signals                |
-|                             |       |    - /rooms/{roomId}/messages (Chat)        |
-|                             |       |    - /rooms/{roomId}/reactions (Reactions)   |
-|                             |       |    - /rooms/{roomId}/participants           |
+|  - POST /api/auth/record-   |       |    - /rooms/{roomId}/messages (Chat)        |
+|    login (IP & User-Agent)  |       |    - /rooms/{roomId}/reactions (Reactions)   |
+|                             |       |    - /users/{uid}/loginHistory (Audit Log)  |
 +-----------------------------+       +---------------------------------------------+
 ```
 
@@ -63,19 +63,28 @@ Sabha is architected around a **Dual-Tier Real-Time Topology** designed for maxi
 
 ## 2. Component Subsystems
 
-### 2.1 Media Manager Selector Logic
-At meeting initialization inside [`MeetingRoom.tsx`](file:///d:/projects/Sabha-/components/meeting/MeetingRoom.tsx):
-1. The client requests a LiveKit token from `/api/livekit-token?room={roomId}&username={peerId}&isHost={isHost}`.
-2. **If LiveKit responds with valid JWT and WebSocket URL:**
-   - Instantiates [`LiveKitRoomManager`](file:///d:/projects/Sabha-/lib/livekitService.ts).
-   - Local tracks (camera, microphone, screen) are published to the LiveKit SFU server.
-   - Remote participants and their tracks are dynamically subscribed using LiveKit client SDK events (`RoomEvent.TrackSubscribed`).
-3. **If LiveKit returns an error or is unconfigured:**
-   - Falls back gracefully to [`WebRTCManager`](file:///d:/projects/Sabha-/lib/webrtc.ts).
+### 2.1 Media Manager Selector & Hardware Handling
+At meeting initialization inside [`MeetingRoom.tsx`](file:///components/meeting/MeetingRoom.tsx):
+1. **Hardware Release in Lobby:** Prior to entering the room, [`GreenRoom.tsx`](file:///components/meeting/GreenRoom.tsx) explicitly terminates all preview media stream tracks (`stream.getTracks().forEach(t => t.stop())`). This immediately releases mobile Android (Camera2 / AudioRecord HAL) and desktop OS hardware handles, eliminating `NotReadableError: device in use` conflicts.
+2. The client requests a LiveKit token from `/api/livekit-token?room={roomId}&username={peerId}&isHost={isHost}`.
+3. **If LiveKit responds with valid JWT and WebSocket URL:**
+   - Instantiates [`LiveKitRoomManager`](file:///lib/livekitService.ts).
+   - Local webcam and microphone tracks are published via native `setCameraEnabled` and `setMicrophoneEnabled`.
+   - In-call mute/unmute toggles execute at the publication layer via `pub.mute()` and `pub.unmute()`, avoiding hardware re-acquisition latency.
+   - Screen sharing tracks (`Track.Source.ScreenShare`) are segregated into dedicated streams (`onRemoteScreenStreamAdded` / `onRemoteScreenStreamRemoved`), preventing camera streams from colliding with presentations.
+4. **If LiveKit returns an error or is unconfigured:**
+   - Falls back gracefully to [`WebRTCManager`](file:///lib/webrtc.ts).
    - Initializes direct peer-to-peer `RTCPeerConnection` instances between all room participants.
    - SDP offers/answers and ICE candidates are relayed through Firestore sub-collections or local `BroadcastChannel`.
 
-### 2.2 Signaling Protocol & State Synchronization
+### 2.2 Spotlight Presentation Stage & Screen Sharing Architecture
+Active screen sharing transitions `VideoGrid.tsx` into a presentation-centric layout:
+- **Presentation Viewport:** Renders the screen share track using CSS `object-contain` over an ultra-dark canvas, guaranteeing that code, IDE text, and slide graphics maintain native pixel sharpness without crop clipping.
+- **Presenter Controls & Fullscreen:** Displays live presenter status ("You are sharing your screen" / "[User] is presenting"), an integrated "Stop Sharing" button, and fullscreen request controls.
+- **Participant Filmstrip:** Maintains participant webcam video tiles and active speaker indicators in an ergonomic horizontal filmstrip below the presentation stage.
+- **Auto-Cleanup:** Hooks into native browser media track `onended` events to reset room layout automatically when sharing is stopped via system-level Chrome/Edge sharing bars.
+
+### 2.3 Signaling Protocol & State Synchronization
 The signaling protocol synchronizes the state of peers, messages, and admin commands:
 
 ```mermaid
@@ -85,8 +94,9 @@ sequenceDiagram
     participant Firestore as Firebase Firestore
     participant Peer as Remote Participant
 
-    Note over Host, Peer: Room Initialization & Presence
-    Host->>Firestore: Create /rooms/{roomId} (RoomSettings)
+    Note over Host, Peer: Room Initialization & Database Host Verification
+    Host->>Firestore: Create /rooms/{roomId} (RoomSettings: hostId = user.uid)
+    Peer->>Firestore: Read /rooms/{roomId} -> Verify hostId
     Peer->>Firestore: Write /rooms/{roomId}/participants/{peerId}
     Firestore-->>Host: onSnapshot() -> Update Participant List
     Firestore-->>Peer: onSnapshot() -> Update Participant List
@@ -106,7 +116,7 @@ sequenceDiagram
     Peer->>Peer: Disable local audio track & update UI
 ```
 
-### 2.3 Audio Analysis Engine ([`lib/audio.ts`](file:///d:/projects/Sabha-/lib/audio.ts))
+### 2.4 Audio Analysis Engine ([`lib/audio.ts`](file:///lib/audio.ts))
 Active speaker detection runs completely client-side to minimize processing overhead:
 - **Audio Context Creation:** Creates an `AudioContext` from the stream's audio tracks.
 - **FFT Analysis:** Uses an `AnalyserNode` with `fftSize = 256` and `smoothingTimeConstant = 0.8`.

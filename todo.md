@@ -4,11 +4,22 @@
 
 ---
 
-## 🎯 High Priority (Current Sprint)
+## 🎯 Recently Completed
 - [x] Complete enterprise-grade documentation suite (`docs/PRD.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/API_SPEC.md`, `docs/DATABASE.md`, `docs/SECURITY.md`, etc.).
 - [x] Create comprehensive task breakdown (`tasks.md`) matching project architecture.
+- [x] Add copy button with visual checkmark animation and clean meeting invite URL sharing (`/room/[roomId]`).
+- [x] Implement Spotlight Presentation Stage in `VideoGrid.tsx` with high-fidelity `object-contain` video rendering.
+- [x] Wire LiveKit SFU dedicated screen sharing routing (`onRemoteScreenStreamAdded` / `onRemoteScreenStreamRemoved`).
+- [x] Enforce mandatory Google authentication with locked display names and login IP auditing (`/api/auth/record-login`).
+- [x] Resolve Android Brave / mobile hardware locks in `GreenRoom.tsx` and eliminate disruptive in-call `alert()` dialogs.
+- [x] True Firestore database host verification (`room.hostId === user.uid`) replacing insecure query params.
+- [x] Implement Whiteboard "Close Board" header action with peer synchronization.
+
+---
+
+## 🎯 High Priority (Current Sprint)
 - [ ] Add end-to-end Cypress or Playwright tests simulating multi-peer video calls in headless Chrome.
-- [ ] Add copy button with visual checkmark animation on meeting invite URL sharing.
+- [ ] Add fallback audio chime when participants raise hand or enter the meeting room.
 
 ---
 

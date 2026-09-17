@@ -174,26 +174,31 @@ Sabha balances scale and simplicity with its dual-topology design:
 
 | Feature | Component | Description |
 | :--- | :--- | :--- |
-| **Green Room Lobby** | `GreenRoom.tsx` | Pre-meeting camera mirror and live microphone sensitivity bar. |
-| **Adaptive Video Grid** | `VideoGrid.tsx` | Dynamically calculated CSS grid resizing from 1 to 12+ participants. |
-| **Active Speaker Halos** | `VideoTile.tsx` | Visual emerald aura (`ring-2 ring-emerald-500`) around active talkers. |
-| **HD Screen Sharing** | `MeetingControls.tsx` | Screen capture with window and system audio mixing. |
-| **Interactive Whiteboard**| `WhiteboardModal.tsx` | Multi-color drawing canvas with brush size controls, eraser, and PNG export. |
+| **Green Room Lobby** | `GreenRoom.tsx` | Pre-meeting camera mirror and live microphone sensitivity bar; cleanly releases preview tracks before room mount to prevent Android/desktop hardware locks. |
+| **Adaptive Video Grid** | `VideoGrid.tsx` | Dynamically calculated CSS grid resizing from 1 to 12+ participants with automatic active-speaker layout. |
+| **Spotlight Presentation Stage** | `VideoGrid.tsx` | Dedicated presentation stage for active screen shares; utilizes `object-contain` for maximum code/slide crispness, presenter badge, full-screen toggle, and local "Stop Sharing" button. |
+| **Active Speaker Halos** | `VideoTile.tsx` | Visual emerald aura (`ring-2 ring-emerald-500`) around active talkers via Web Audio FFT energy sampling. |
+| **LiveKit SFU Screen Sharing** | `MeetingControls.tsx` | High-definition screen capture with dedicated LiveKit track routing (`onRemoteScreenStreamAdded` / `onRemoteScreenStreamRemoved`). |
+| **Interactive Whiteboard**| `WhiteboardModal.tsx` | Multi-color drawing canvas with brush size controls, eraser, PNG export, and explicit "Close Board" header action. |
 | **In-Meeting Chat** | `ChatPanel.tsx` | Broadcast channel + targeted 1-on-1 direct messaging with unread badges. |
-| **In-Browser Recording** | `MeetingControls.tsx` | Client-side `MediaRecorder` capture producing downloadable WebM files. |
+| **In-Browser Recording** | `MeetingControls.tsx` | Client-side `MediaRecorder` capture producing downloadable WebM files ($0 cloud storage/transcoding cost). |
 | **Emoji Reactions** | `ReactionsOverlay.tsx` | Floating emoji animations (👍, ❤️, 👏, 😂, 🎉, 🚀) with canvas-confetti bursts. |
 | **Hand Raise Queue** | `ParticipantsPanel.tsx` | Visual badge and queue tracking for orderly participant questions. |
+| **Clean Invite Sharing** | `ShareMeetingModal.tsx`| Share clean invite URLs (`/room/[roomId]`) via Web Share API, WhatsApp, or 1-click animated copy button. |
+| **Login IP Auditing** | `/api/auth/record-login` | Serverless endpoint logging participant IP addresses, user agents, and timestamps to Firestore for security auditability. |
 
 ---
 
 ## 9. Host Administration & Room Security
 
-The room creator is designated as **Host (सभापति)** and granted admin privileges inside [`HostControlModal.tsx`](file:///d:/projects/Sabha-/components/meeting/HostControlModal.tsx):
+The room creator is designated as **Host (सभापति)** via authentic Firestore database verification (`room.hostId === user.uid`), fully deprecating insecure client-side `?host=true` URL manipulation:
 - **Global Mute All:** Broadcasts `mute-command` signal, instantly muting all attendee audio tracks.
 - **Individual Mute:** Allows host to mute any specific noisy participant.
 - **Kick Participant:** Emits `kick-command` forcing the target client to disconnect and redirect.
 - **Lock Sabha:** Sets `isLocked: true`, rejecting any subsequent join attempts.
+- **Require Cameras On:** Host can enforce `requireVideo: true`, requiring all attendees to keep their webcam active.
 - **Feature Permissions:** Dynamically toggles permissions for Screen Sharing, In-Meeting Chat, and Self-Unmute.
+- **Clean URLs:** Host invite links never leak host administrative parameters; invitation links are clean `/room/[roomId]` paths.
 
 ---
 
@@ -202,17 +207,21 @@ The room creator is designated as **Host (सभापति)** and granted admi
 ### Firestore Collections Hierarchy
 ```
 rooms/
-  └── {roomId}                          <-- RoomSettings document
+  └── {roomId}                          <-- RoomSettings (hostId, isLocked, requireVideo, etc.)
         ├── participants/{peerId}       <-- Participant presence & states
         ├── messages/{messageId}        <-- In-meeting chat history
         ├── reactions/{reactionId}      <-- Ephemeral reaction broadcasts
         └── signals/{signalId}          <-- WebRTC SDP offers/answers & commands
+users/
+  └── {uid}                             <-- User profile (displayName, email, photoURL)
+        └── loginHistory/{loginId}      <-- Audit trail (ip, userAgent, timestamp)
 ```
 
 ### Firestore Security Rules Summary
 - Participants can only update their own presence documents.
 - Message text is constrained to maximum 2,000 characters.
-- Rooms can only be locked or configured by the authentic host.
+- Rooms can only be locked or configured by the authentic host verified against `room.hostId`.
+- Participant display names and avatars are permanently bound to authenticated Google OAuth credentials.
 
 ---
 
@@ -226,6 +235,18 @@ rooms/
   {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "wsUrl": "wss://sabha-meet.livekit.cloud"
+  }
+  ```
+
+### 11.2 Login IP Auditing Endpoint
+- **Method:** `POST /api/auth/record-login`
+- **Body:** `{ "uid": string, "email": string, "displayName": string, "photoURL": string }`
+- **Response:**
+  ```json
+  {
+    "success": true,
+    "ip": "203.0.113.195",
+    "timestamp": 1726615200000
   }
   ```
 

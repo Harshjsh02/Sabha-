@@ -43,6 +43,33 @@ Generates a signed JSON Web Token (JWT) granting access to join a specified Live
 }
 ```
 
+### 1.2 Record User Login & IP Audit Endpoint
+Logs participant login telemetry, public IP address, user agent, and timestamp to Firestore for compliance and forensic auditing.
+
+- **Route:** `POST /api/auth/record-login`
+- **Location:** [`app/api/auth/record-login/route.ts`](file:///app/api/auth/record-login/route.ts)
+- **Auth:** Client authenticated via Google OAuth UID
+
+#### Request Body
+```json
+{
+  "uid": "google_user_uid_12345",
+  "email": "user@example.com",
+  "displayName": "Verified User",
+  "photoURL": "https://lh3.googleusercontent.com/..."
+}
+```
+
+#### Responses
+**200 OK**
+```json
+{
+  "success": true,
+  "ip": "203.0.113.195",
+  "timestamp": 1726615200000
+}
+```
+
 ---
 
 ## 2. Real-Time Signaling & Firestore Data Schema
@@ -51,15 +78,16 @@ When falling back to P2P Mesh or synchronizing room state, Sabha uses Firestore 
 
 ### 2.1 Room State Document
 - **Path:** `/rooms/{roomId}`
-- **Interface:** `RoomSettings` ([`lib/types.ts`](file:///d:/projects/Sabha-/lib/types.ts))
+- **Interface:** `RoomSettings` ([`lib/types.ts`](file:///lib/types.ts))
 
 ```typescript
 {
   roomId: string;             // Unique room slug or uuid
-  hostId: string;             // Participant ID of the room creator
+  hostId: string;             // Authenticated Google UID of the room creator
   hostName: string;           // Display name of the host
   title: string;              // e.g. "Sabha Weekly Sync"
   isLocked: boolean;          // If true, new joiners are denied entry
+  requireVideo: boolean;      // If true, host mandates all webcams remain active
   allowScreenShare: boolean;  // Host permission toggle for participants
   allowChat: boolean;         // Host permission toggle for participants
   allowUnmute: boolean;       // Host permission toggle for participants
@@ -139,6 +167,29 @@ Used for SDP offer/answer exchanges and host moderator signals when operating in
 - **`mute-command`**: Instructs the target participant's client to disable local audio track (`stream.getAudioTracks()[0].enabled = false`) and update presence state.
 - **`kick-command`**: Instructs the target participant's client to unmount WebRTC listeners, tear down streams, and navigate back to the home route (`/`).
 
+### 2.6 User Identity & Login History Schema
+- **Path:** `/users/{uid}`
+- **Subcollection:** `/users/{uid}/loginHistory/{loginId}`
+
+```typescript
+// /users/{uid} document
+{
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string;
+  lastLoginAt: number;
+  lastLoginIp: string;
+}
+
+// /users/{uid}/loginHistory/{loginId} document
+{
+  ip: string;
+  userAgent: string;
+  timestamp: number;
+}
+```
+
 ---
 
 ## 3. Web BroadcastChannel Protocol (Local Multi-Tab)
@@ -146,3 +197,36 @@ Used for SDP offer/answer exchanges and host moderator signals when operating in
 When running multiple tabs on the same origin (such as during local development and testing):
 - **Channel Name:** `sabha_room_${roomId}`
 - **Payload Format:** Emits exact `SignalData` JSON frames directly over the browser's native `BroadcastChannel` API, bypassing Firestore round-trips for zero network overhead.
+
+---
+
+## 4. LiveKit Real-Time DataChannel Protocol
+
+When operating in LiveKit SFU mode, real-time collaboration messages (such as Whiteboard strokes) are transmitted using reliable binary DataChannels (`room.localParticipant.publishData`):
+
+### 4.1 Whiteboard Stroke Event
+```json
+{
+  "type": "whiteboard",
+  "event": {
+    "type": "draw",
+    "x": 240,
+    "y": 180,
+    "prevX": 235,
+    "prevY": 178,
+    "color": "#10b981",
+    "width": 3,
+    "isErasing": false
+  }
+}
+```
+
+### 4.2 Whiteboard Clear Canvas Event
+```json
+{
+  "type": "whiteboard",
+  "event": {
+    "type": "clear"
+  }
+}
+```

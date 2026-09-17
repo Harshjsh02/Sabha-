@@ -1,48 +1,51 @@
 # Sabha (सभा) 🎙️📹
 
 > **सभा (Sabha)** is a Sanskrit word meaning *assembly, council, or congregation*.  
-> A high-performance, Zoom-like real-time video conferencing web application engineered to run entirely on **100% free-tier cloud resources** (Vercel + Firebase Spark + Peer-to-Peer WebRTC).
+> A high-performance, Zoom-like real-time video conferencing web application engineered to run entirely on **100% free-tier cloud resources** with a dual-tier hybrid media engine: **LiveKit Cloud SFU (50 to 100+ participants)** with autonomous **WebRTC Full-Mesh fallback**.
 
 ---
 
 ## 🚀 Features (Zoom Parity)
 
-- 🔒 **Google Authentication & Guest Mode**: Instant 1-click login with Google or join with custom display name.
+- 🔒 **Mandatory Google Authentication & Verified Profiles**: Secure login enforcing Google verified identities with immutable display names and login IP auditing (`/api/auth/record-login`).
 - 👑 **Host (सभापति) Admin Controls**:
+  - **Database Host Verification**: Authenticated via Firestore (`room.hostId === user.uid`), eliminating insecure URL spoofing.
   - **Mute All**: Instantly mute every participant's microphone.
   - **Individual Mute**: Mute any noisy participant.
   - **Kick Participant**: Remove disruptive users from the room.
   - **Lock Sabha**: Lock room to prevent unauthorized new entries.
+  - **Require Cameras**: Mandate all participants keep their webcams active.
   - **Security Permissions**: Toggle participant rights to screen share, chat, or unmute.
-- 💻 **HD Screen Sharing**: Share application windows, browser tabs, or whole screens with system audio.
+- 💻 **Spotlight Presentation Stage (Screen Sharing)**: Dedicated presentation stage rendering high-fidelity screen shares with `object-contain`, presenter header badge, participant filmstrip, and 1-click "Stop Sharing".
 - 💬 **In-Meeting Chat**: Public messages to everyone or direct 1-on-1 private messages with live unread indicators.
-- 🎨 **Interactive Sabha Whiteboard**: Brainstorm together with multi-color drawing canvas, stroke controls, and 1-click PNG image export.
+- 🎨 **Interactive Sabha Whiteboard**: Brainstorm together with multi-color drawing canvas, stroke controls, 1-click PNG export, and close board action.
 - ⏺️ **In-Browser Meeting Recording**: Record video & audio directly via the browser's `MediaRecorder` API into downloadable `.webm` files with **$0 cloud recording fees**.
 - ✋ **Hand Raising & Reactions**: Raise hand queue for orderly assemblies + floating emoji reactions (👍, ❤️, 👏, 😂, 🎉, 🚀) with celebratory confetti.
 - 🎙️ **Active Speaker Detection**: Glowing emerald audio halo around whoever is actively speaking using Web Audio API frequency analysis.
-- 🚪 **Green Room Lobby**: Pre-meeting preview of your webcam and live audio visualizer before stepping into the meeting.
+- 🚪 **Green Room Lobby**: Pre-meeting preview of your webcam and live audio visualizer; cleanly releases OS hardware handles on join for mobile Android/desktop resilience.
+- 🔗 **Clean Invite Sharing**: Clean invite URLs (`/room/[roomId]`) with Web Share API, WhatsApp 1-click, and animated copy button.
 
 ---
 
 ## 📊 Capacity & Architecture: How Many People Can Sabha Handle for Free?
 
-### Real-Time Media Architecture
-Sabha uses a **Full-Mesh WebRTC Topology** paired with Google's free public STUN servers and Firebase Firestore for real-time signaling. Media streams flow directly browser-to-browser without passing through expensive intermediary media servers.
+### Real-Time Dual-Tier Media Architecture
+Sabha uses an intelligent hybrid engine that combines **LiveKit Cloud SFU** with **Full-Mesh WebRTC**:
 
 | Mode | Capacity | Description |
 | :--- | :--- | :--- |
-| **Optimal HD Meeting** | **4 to 6 people** | Crystal clear 720p/1080p video & stereo audio on standard laptops and broadband. |
-| **Playable Group Discussion** | **8 to 10 people** | Audio-first meetings or meetings where non-speakers turn off video. |
+| **LiveKit SFU Mode** | **50 to 100+ people** | Ingests 1 stream per peer and dynamically fans out with Dynacast and adaptive bitrate. |
+| **WebRTC Mesh Mode** | **4 to 8 people** | Autonomous fallback using Google's free STUN servers and Firebase Firestore signaling. |
 | **Concurrent Meetings Across App** | **Thousands / day** | Firebase Firestore Free Spark Plan provides **50,000 document reads/day** and **20,000 writes/day**, and Vercel provides **100 GB free bandwidth/month**. |
 
 ---
 
 ## 🛠️ Tech Stack & Zero-Cost Infrastructure
 
-- **Frontend & Routing**: Next.js 16 (App Router, TypeScript, React 19)
+- **Frontend & Routing**: Next.js 16 (App Router, TypeScript, React 19, Turbopack)
 - **Styling**: Tailwind CSS v4 + Lucide Icons + Glassmorphism HUD
-- **Real-Time Signaling**: Firebase Firestore (or automatic local BroadcastChannel fallback)
-- **Authentication**: Firebase Google Authentication
+- **Real-Time Signaling**: Firebase Firestore + LiveKit Cloud SFU (or automatic local BroadcastChannel fallback)
+- **Authentication & Auditing**: Firebase Google Authentication + Serverless IP Audit Log
 - **Media Engine**: Native WebRTC (`RTCPeerConnection`, `getUserMedia`, `getDisplayMedia`, `Web Audio API`)
 - **Hosting**: Vercel (Hobby Tier: $0.00 / month forever)
 - **Database**: Firebase (Spark Tier: $0.00 / month forever)

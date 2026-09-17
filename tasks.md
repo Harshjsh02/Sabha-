@@ -32,7 +32,7 @@
 
 ---
 
-## Sprint 4: Architecture Documentation & Developer Ecosystem (Current)
+## Sprint 4: Architecture Documentation & Developer Ecosystem (Completed)
 - [x] **TASK-401:** Benchmark documentation against reference standards (`Rhytam23/NYC`).
 - [x] **TASK-402:** Create `docs/PRD.md` detailing problem space, personas, and feature specifications.
 - [x] **TASK-403:** Create `docs/SYSTEM_ARCHITECTURE.md` with sequence and topology diagrams.
@@ -44,9 +44,30 @@
 
 ---
 
-## Sprint 5: Future Enhancements & Scalability (Roadmap)
-- [ ] **TASK-501:** Implement virtual background blurring and custom image replacement via MediaPipe Selfie Segmentation.
-- [ ] **TASK-502:** Add AI-powered automated live meeting transcription using Web Speech API or Gemini Flash.
-- [ ] **TASK-503:** Implement Breakout Rooms feature with independent Firestore sub-channel rooms.
-- [ ] **TASK-504:** Support mobile-responsive portrait HUD optimizations for smartphone browsers.
-- [ ] **TASK-505:** Add end-of-meeting summary notes export (Markdown format).
+## Sprint 5: Auth Enforcement, Host Verification & Security Hardening (Completed)
+- [x] **TASK-501:** Implement mandatory Google OAuth authentication before meeting entry; block unauthorized anonymous room joiners.
+- [x] **TASK-502:** Lock participant display identity to verified Google profile name and photo; disable client-side name spoofing.
+- [x] **TASK-503:** Build `/api/auth/record-login` endpoint to log participant login IP address, user agent, and timestamp to Firestore (`/users/{uid}/loginHistory`).
+- [x] **TASK-504:** Implement database-level host verification (`room.hostId === user.uid`) replacing insecure client-side `?host=true` query parameters.
+- [x] **TASK-505:** Create clean invite link architecture (`/room/[roomId]`) with dedicated `ShareMeetingModal` supporting Web Share API, WhatsApp, and copy-link animations.
+- [x] **TASK-506:** Add host-enforced camera toggle (`requireVideo`), allowing the host to mandate all participants keep cameras active.
+- [x] **TASK-507:** Add explicit "Close Board" header action to Whiteboard modal with live synchronization across peers.
+
+---
+
+## Sprint 6: LiveKit SFU Screen Sharing & Mobile Media Stability (Completed)
+- [x] **TASK-601:** Implement dedicated LiveKit screen share track routing (`onRemoteScreenStreamAdded`, `onRemoteScreenStreamRemoved`, `onLocalScreenShareStopped`).
+- [x] **TASK-602:** Build `ScreenPresentationStage` in `VideoGrid.tsx` with high-fidelity `object-contain` rendering, presenter badge, full-screen toggle, and local "Stop Sharing" button.
+- [x] **TASK-603:** Implement participant filmstrip beneath presentation stage maintaining live video and audio activity indicators during screenshares.
+- [x] **TASK-604:** Resolve mobile Android Brave hardware lock bug by releasing preview tracks in `GreenRoom.tsx` before room connection.
+- [x] **TASK-605:** Implement publication-level `mute()` / `unmute()` in `LiveKitRoomManager` to prevent device re-acquisition failures and eliminate blocking browser `alert()` modals.
+- [x] **TASK-606:** Add auto-cleanup listeners for screen share track `onended` events when participants stop sharing via browser system UI.
+
+---
+
+## Sprint 7: Future Enhancements & Scalability (Roadmap)
+- [ ] **TASK-701:** Implement virtual background blurring and custom image replacement via MediaPipe Selfie Segmentation.
+- [ ] **TASK-702:** Add AI-powered automated live meeting transcription using Web Speech API or Gemini Flash.
+- [ ] **TASK-703:** Implement Breakout Rooms feature with independent Firestore sub-channel rooms.
+- [ ] **TASK-704:** Support mobile-responsive portrait HUD optimizations for smartphone browsers.
+- [ ] **TASK-705:** Add end-of-meeting summary notes export (Markdown format).

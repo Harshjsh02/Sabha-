@@ -23,13 +23,15 @@
 ## 2. Current Development Phase & Status
 
 ### Phase: Production Ready & Extended Documentation Suite
-- **Branch:** `docs/comprehensive-documentation`
-- **Codebase Integrity:** Working tree clean, Next.js 16 App Router routes verified.
-- **Mobile Optimizations:** Viewport touch targets, orientation responsiveness, and iOS safe area padding handled.
+### Phase: Production Ready & Extended Documentation Suite
+- **Branch:** `main`
+- **Codebase Integrity:** Working tree clean, Next.js 16 Turbopack production build verified (0 errors).
+- **Mobile Optimizations:** Viewport touch targets, orientation responsiveness, and iOS/Android hardware lock resolutions in `GreenRoom.tsx`.
 - **Active Initiatives:**
-  - Comprehensive documentation suite benchmarked against high-depth reference architectures.
-  - Zero-cost architecture validation across Vercel Hobby + Firebase Spark.
-  - Development context and product specification alignment for AI pair programming.
+  - Dedicated LiveKit screen sharing publication routing and `ScreenPresentationStage` in `VideoGrid.tsx`.
+  - Mandatory Google Authentication with immutable profiles and login IP audit logging (`/api/auth/record-login`).
+  - True Firestore database host verification (`room.hostId === user.uid`) replacing insecure query params.
+  - Clean invite links (`/room/[roomId]`) with `ShareMeetingModal`.
 
 ---
 
@@ -51,8 +53,9 @@
                     │  LiveKit SFU Mode       │  │  WebRTC Mesh Mode       │
                     │  - Ingest 1 stream/user │  │  - N*(N-1)/2 connections│
                     │  - Fan-out to all peers │  │  - Google Public STUN   │
-                    │  - Dynacast & Adaptive  │  │  - Firestore Signaling  │
-                    │  - 50 to 100+ users     │  │  - 4 to 10 users        │
+                    │  - Screen share routing │  │  - Firestore Signaling  │
+                    │  - Dynacast & Adaptive  │  │  - 4 to 10 users        │
+                    │  - 50 to 100+ users     │  │  (Fallback)             │
                     └─────────────────────────┘  └─────────────────────────┘
 ```
 
@@ -66,15 +69,17 @@
 
 | Module / Component | Path | Responsibility |
 | :--- | :--- | :--- |
-| **Meeting Orchestrator** | `components/meeting/MeetingRoom.tsx` | Manages local/remote streams, audio analyser, active modal state, recording, duration timer. |
-| **Green Room Lobby** | `components/meeting/GreenRoom.tsx` | Pre-meeting webcam preview, permission gates, microphone visualizer bar. |
-| **LiveKit Room Manager**| `lib/livekitService.ts` | Handles SFU connections, remote track subscription events, dynacast, and server disconnects. |
+| **Meeting Orchestrator** | `components/meeting/MeetingRoom.tsx` | Manages local/remote camera and screen streams, audio analyser, active modal state, recording, duration timer. |
+| **Video Grid & Spotlight Stage** | `components/meeting/VideoGrid.tsx` | Dynamically renders adaptive video grid, active speaker spotlight, and dedicated `ScreenPresentationStage` with participant filmstrip. |
+| **Green Room Lobby** | `components/meeting/GreenRoom.tsx` | Pre-meeting webcam preview, permission gates, microphone visualizer; cleanly stops preview tracks before room mount to release OS hardware locks. |
+| **LiveKit Room Manager**| `lib/livekitService.ts` | Handles SFU connections, screen share track subscriptions, dynacast, and non-blocking `mute()`/`unmute()` toggles. |
 | **WebRTC Mesh Manager** | `lib/webrtc.ts` | Native peer connection lifecycle, polite-peer SDP offer/answer collision resolution, ICE candidate exchange. |
 | **Audio Analyser** | `lib/audio.ts` | FFT frequency analysis, RMS decibel calculation, active speaker detection with glowing emerald halo. |
-| **Interactive Whiteboard**| `components/meeting/WhiteboardModal.tsx`| HTML5 canvas whiteboard with stroke colors, widths, eraser, and PNG export. |
-| **Host Moderation** | `components/meeting/HostControlModal.tsx`| Mute All, Kick disruptive peers, Lock Sabha, and toggle permission rights. |
-| **In-Meeting Chat** | `components/meeting/ChatPanel.tsx` | Broadcast messages & 1-on-1 direct private messages with unread counters. |
-| **Auth Provider** | `lib/authContext.tsx` | Firebase Auth listener, Google sign-in popup, guest user profile fallback. |
+| **Interactive Whiteboard**| `components/meeting/WhiteboardModal.tsx`| HTML5 canvas whiteboard with stroke colors, widths, eraser, PNG export, and close action. |
+| **Host Moderation** | `components/meeting/HostControlModal.tsx`| Mute All, Kick disruptive peers, Lock Sabha, require cameras (`requireVideo`), and toggle permission rights. |
+| **Share Modal** | `components/meeting/ShareMeetingModal.tsx`| Generates clean `/room/[roomId]` invite links, Web Share API, WhatsApp sharing. |
+| **In-Meeting Chat** | `ChatPanel.tsx` | Broadcast messages & 1-on-1 direct private messages with unread counters. |
+| **Auth Provider & Audit** | `lib/authContext.tsx`, `/api/auth/record-login` | Firebase Auth listener, Google sign-in, login IP and user agent auditing. |
 
 ---
 

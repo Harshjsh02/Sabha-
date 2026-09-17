@@ -1,17 +1,104 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Participant } from '@/lib/types';
 import { VideoTile } from './VideoTile';
+import { Maximize2, Monitor } from 'lucide-react';
 
 interface VideoGridProps {
   localParticipant: Participant;
   localStream: MediaStream | null;
   remoteParticipants: Participant[];
   remoteStreams: Map<string, MediaStream>;
+  screenStream?: MediaStream | null;
+  remoteScreenStreams?: Map<string, MediaStream>;
+  onStopScreenShare?: () => void;
   isHostViewer: boolean;
   onMuteParticipant?: (id: string) => void;
   onKickParticipant?: (id: string) => void;
+}
+
+function ScreenPresentationStage({
+  stream,
+  presenter,
+  isLocal,
+  onStopScreenShare,
+}: {
+  stream: MediaStream;
+  presenter: Participant;
+  isLocal: boolean;
+  onStopScreenShare?: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const stageContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+    if (videoEl.srcObject !== stream) {
+      videoEl.srcObject = stream;
+    }
+    videoEl.play().catch((err) => {
+      console.warn('Screen share playback notice:', err);
+    });
+  }, [stream]);
+
+  const toggleFullscreen = () => {
+    if (!stageContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      stageContainerRef.current.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
+  return (
+    <div
+      ref={stageContainerRef}
+      className="relative w-full h-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center group shadow-2xl"
+    >
+      {/* Presentation Stream - object-contain preserves high fidelity for slides & code */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        className="w-full h-full object-contain bg-slate-950"
+      />
+
+      {/* Top Banner Overlay */}
+      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 shadow-lg pointer-events-auto">
+          <Monitor className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <span className="text-xs font-semibold text-white">
+            {isLocal ? 'You are sharing your screen' : `${presenter.name} is presenting`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {isLocal && onStopScreenShare && (
+            <button
+              onClick={onStopScreenShare}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/30 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              Stop Sharing
+            </button>
+          )}
+
+          <button
+            onClick={toggleFullscreen}
+            className="p-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 shadow-lg transition cursor-pointer"
+            title={isFullscreen ? 'Exit Fullscreen' : 'View Fullscreen'}
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function VideoGrid({
@@ -19,6 +106,9 @@ export function VideoGrid({
   localStream,
   remoteParticipants,
   remoteStreams,
+  screenStream,
+  remoteScreenStreams,
+  onStopScreenShare,
   isHostViewer,
   onMuteParticipant,
   onKickParticipant,
@@ -37,7 +127,64 @@ export function VideoGrid({
     return remoteStreams.get(id) || null;
   };
 
-  // If someone is pinned, show Speaker / Spotlight layout
+  // Check if anyone is presenting their screen
+  const isLocalScreenSharing = Boolean(localParticipant.screenSharing && screenStream);
+  const remoteScreenPresenter =
+    remoteParticipants.find((p) => p.screenSharing && remoteScreenStreams?.has(p.id)) ||
+    (remoteScreenStreams && remoteScreenStreams.size > 0
+      ? remoteParticipants.find((p) => remoteScreenStreams.has(p.id))
+      : undefined);
+
+  const isScreenSharingActive = Boolean(
+    isLocalScreenSharing || (remoteScreenPresenter && remoteScreenStreams?.get(remoteScreenPresenter.id))
+  );
+
+  const presentationStream = isLocalScreenSharing
+    ? screenStream
+    : remoteScreenPresenter
+    ? remoteScreenStreams?.get(remoteScreenPresenter.id) || null
+    : null;
+
+  const presenter = isLocalScreenSharing
+    ? localParticipant
+    : remoteScreenPresenter || null;
+
+  // 1. Spotlight Presentation Stage (Active screen share takes primary spotlight)
+  if (isScreenSharingActive && presentationStream && presenter) {
+    return (
+      <div className="flex-1 flex flex-col h-full gap-3 p-3 overflow-hidden">
+        {/* Main Presentation Stage */}
+        <div className="flex-1 min-h-0 relative">
+          <ScreenPresentationStage
+            stream={presentationStream}
+            presenter={presenter}
+            isLocal={isLocalScreenSharing}
+            onStopScreenShare={onStopScreenShare}
+          />
+        </div>
+
+        {/* Participant Filmstrip Below Presentation */}
+        <div className="h-32 sm:h-36 flex gap-3 overflow-x-auto pb-1 flex-shrink-0">
+          {allParticipants.map((p) => (
+            <div key={p.id} className="w-44 sm:w-48 h-full flex-shrink-0">
+              <VideoTile
+                participant={p}
+                stream={getStreamForParticipant(p.id)}
+                isLocal={p.id === localParticipant.id}
+                isHostViewer={isHostViewer}
+                isPinned={pinnedId === p.id}
+                onTogglePin={togglePin}
+                onMuteParticipant={onMuteParticipant}
+                onKickParticipant={onKickParticipant}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Speaker / Spotlight layout if someone is pinned
   if (pinnedId) {
     const pinnedParticipant = allParticipants.find((p) => p.id === pinnedId) || localParticipant;
     const otherParticipants = allParticipants.filter((p) => p.id !== pinnedParticipant.id);

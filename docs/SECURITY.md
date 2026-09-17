@@ -19,8 +19,10 @@ Sabha is engineered with privacy-by-design principles to ensure that video, audi
 ### 1.1 Core Security Principles
 1. **End-to-End Media Encryption:** All audio and video tracks flowing through WebRTC peer connections or LiveKit SFU endpoints are encrypted using standard **DTLS-SRTP** (Datagram Transport Layer Security / Secure Real-time Transport Protocol).
 2. **Zero-Knowledge Cloud Recording:** Meeting recordings are captured client-side via the browser's native `MediaRecorder` API directly into local memory and saved to the user's hard drive. No audio or video data is uploaded to a remote recording server or third-party storage bucket.
-3. **Least-Privilege Token Generation:** LiveKit access tokens are cryptographically signed server-side using the `LIVEKIT_API_SECRET`. Tokens are scoped strictly to the requested `roomId` and automatically expire after the session.
-4. **Host Authority Enactment:** Administrative moderation actions (such as muting, kicking, and locking rooms) are verifiable and enforced across all client interfaces.
+3. **Mandatory Google OAuth & Immutable Identities:** Meeting access strictly mandates authenticated Google OAuth sign-in. Participant display names and avatars are immutably tied to verified Google accounts, completely eliminating guest pseudonymity and impersonation attacks.
+4. **Login IP & Device Auditing:** Every participant login triggers an audit write via `/api/auth/record-login`, appending the client's public IP address, user-agent string, and timestamp to a secure Firestore sub-collection (`/users/{uid}/loginHistory`).
+5. **Database-Enforced Host Authority:** Host moderation authority is verified against the Firestore room record (`room.hostId === user.uid`). Client-side URL tampering (`?host=true`) is completely ignored.
+6. **Least-Privilege Token Generation:** LiveKit access tokens are cryptographically signed server-side using the `LIVEKIT_API_SECRET`. Tokens are scoped strictly to the requested `roomId` and automatically expire after the session.
 
 ---
 
@@ -28,11 +30,13 @@ Sabha is engineered with privacy-by-design principles to ensure that video, audi
 
 | Threat Vector | Potential Impact | Sabha Mitigation |
 | :--- | :--- | :--- |
-| **"Zoombombing" / Room Crashing** | Unauthorized trolls join public meeting links and disrupt calls. | **Room Lock:** Host can lock the room (`isLocked: true`).<br>**Host Kick:** Host can eject any disruptive user with instant peer connection destruction.<br>**Green Room:** Preview identity before granting entry. |
+| **"Zoombombing" / Impersonation** | Unauthorized trolls join with fake identities and disrupt calls. | **Mandatory Google Auth:** Blocks anonymous joiners; names are locked to verified Google identities.<br>**Room Lock:** Host can lock the room (`isLocked: true`).<br>**Host Kick:** Host can eject any disruptive user with instant peer connection destruction. |
+| **Privilege Escalation via URL** | Malicious users append `?host=true` to meeting URLs to hijack room controls. | **Database Host Verification:** Host status is validated strictly against Firestore `room.hostId === user.uid`. Clean `/room/[roomId]` invite URLs prevent parameter injection. |
 | **Eavesdropping / Wiretapping** | Intermediary network observer captures video/audio streams. | **DTLS-SRTP Encryption:** Mandatory across all WebRTC peer connections. Unencrypted RTP is rejected by browsers. |
+| **Abuse / Anonymous Harassment** | Bad actors abuse meeting rooms with no accountability. | **Login IP Auditing:** `/api/auth/record-login` records user IP addresses, timestamps, and browser headers for accountability and security tracing. |
 | **Token Forgery** | Malicious client attempts to grant itself host or administrative privileges in SFU mode. | **Server-Side Token Minting:** Generated via private server environment variables (`LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`) in Next.js Serverless Route. |
 | **Cross-Room Data Leakage** | Participants in Room A read chat or signals from Room B. | **Scoped Firestore Collections:** All queries are strictly parameterized under `/rooms/{roomId}/*`. |
-| **Microphone / Camera Hijacking** | Malicious scripts attempt background audio recording. | **Browser Permissions API:** Explicit browser prompts for hardware access; camera indicator light; visual mute badges in HUD. |
+| **Microphone / Camera Hijacking** | Malicious scripts attempt background audio recording. | **Browser Permissions API:** Explicit browser prompts for hardware access; camera indicator light; visual mute badges in HUD. Clean preview track disposal prevents background handle lingering. |
 
 ---
 
