@@ -33,7 +33,8 @@ interface MeetingControlsProps {
   onToggleRecording: () => void;
   onToggleParticipantsPanel: () => void;
   onToggleChatPanel: () => void;
-  onOpenWhiteboard: () => void;
+  isWhiteboardOpen: boolean;
+  onToggleWhiteboard: () => void;
   onOpenSecurityModal: () => void;
   onSendReaction: (emoji: string) => void;
   onLeaveMeeting: () => void;
@@ -55,7 +56,8 @@ export function MeetingControls({
   onToggleRecording,
   onToggleParticipantsPanel,
   onToggleChatPanel,
-  onOpenWhiteboard,
+  isWhiteboardOpen,
+  onToggleWhiteboard,
   onOpenSecurityModal,
   onSendReaction,
   onLeaveMeeting,
@@ -165,14 +167,20 @@ export function MeetingControls({
           <span className="text-[10px] font-medium">{screenSharing ? 'Sharing' : 'Share'}</span>
         </button>
 
-        {/* Whiteboard (Tablet/Desktop) */}
+        {/* Whiteboard */}
         <button
-          onClick={onOpenWhiteboard}
-          className="hidden md:flex flex-col items-center justify-center w-14 h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
-          title="Interactive Whiteboard"
+          onClick={onToggleWhiteboard}
+          className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition cursor-pointer ${
+            isWhiteboardOpen
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-md'
+              : 'text-slate-200 hover:bg-slate-800/80'
+          }`}
+          title={isWhiteboardOpen ? 'Close Whiteboard' : 'Open Whiteboard'}
         >
-          <PenTool className="w-5 h-5 mb-1 text-sky-400" />
-          <span className="text-[10px] font-medium">Board</span>
+          <PenTool className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 text-sky-400" />
+          <span className="text-[9px] sm:text-[10px] font-medium hidden sm:inline">
+            {isWhiteboardOpen ? 'Close' : 'Board'}
+          </span>
         </button>
 
         {/* Local Recording */}

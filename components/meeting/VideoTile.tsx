@@ -41,10 +41,18 @@ export function VideoTile({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Attach stream to HTMLVideoElement
+  // Attach stream to HTMLVideoElement and ensure playback
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    if (stream && participant.videoEnabled) {
+      if (videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+      }
+      videoEl.play().catch((err) => {
+        console.warn('Video playback notice:', err);
+      });
     }
   }, [stream, participant.videoEnabled]);
 
@@ -81,17 +89,19 @@ export function VideoTile({
           : 'border-slate-800 hover:border-slate-700'
       }`}
     >
-      {/* Video Stream */}
-      {participant.videoEnabled && stream ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`}
-        />
-      ) : (
-        /* Avatar Fallback */
+      {/* Video Stream (Kept mounted for instant play) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''} ${
+          participant.videoEnabled && stream ? 'block' : 'hidden'
+        }`}
+      />
+
+      {/* Avatar Fallback */}
+      {(!participant.videoEnabled || !stream) && (
         <div className="flex flex-col items-center justify-center p-4">
           <div className="relative">
             {participant.photoURL ? (

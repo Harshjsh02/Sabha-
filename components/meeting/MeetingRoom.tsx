@@ -271,19 +271,40 @@ export function MeetingRoom({
     rtcManagerRef.current?.updateParticipantState({ audioEnabled: nextState });
   };
 
+  // Automatically turn on video if host forces cameras on
+  useEffect(() => {
+    if (roomSettings.requireVideo && !localParticipant.isHost && !localParticipant.videoEnabled) {
+      const enableVideoAutomatically = async () => {
+        if (liveKitManagerRef.current) {
+          const updatedStream = await liveKitManagerRef.current.setVideoEnabled(true);
+          setLocalStream(new MediaStream(updatedStream.getTracks()));
+        } else if (localStream) {
+          localStream.getVideoTracks().forEach((t) => (t.enabled = true));
+          setLocalStream(new MediaStream(localStream.getTracks()));
+        }
+        setLocalParticipant((p) => ({ ...p, videoEnabled: true }));
+        rtcManagerRef.current?.updateParticipantState({ videoEnabled: true });
+        alert('The host (सभापति) has required all participants to keep their camera turned on.');
+      };
+      enableVideoAutomatically();
+    }
+  }, [roomSettings.requireVideo, localParticipant.isHost, localParticipant.videoEnabled]);
+
   // Toggle Video
   const handleToggleVideo = async () => {
+    if (roomSettings.requireVideo && !localParticipant.isHost && localParticipant.videoEnabled) {
+      alert('The host (सभापति) requires all participants to keep their camera on.');
+      return;
+    }
+
     const nextState = !localParticipant.videoEnabled;
 
     if (liveKitManagerRef.current) {
       const updatedStream = await liveKitManagerRef.current.setVideoEnabled(nextState);
-      if (updatedStream && updatedStream.getTracks().length > 0) {
-        setLocalStream(updatedStream);
-      }
-    }
-
-    if (localStream) {
+      setLocalStream(new MediaStream(updatedStream.getTracks()));
+    } else if (localStream) {
       localStream.getVideoTracks().forEach((t) => (t.enabled = nextState));
+      setLocalStream(new MediaStream(localStream.getTracks()));
     }
 
     setLocalParticipant((p) => ({ ...p, videoEnabled: nextState }));
@@ -597,7 +618,8 @@ export function MeetingRoom({
           setIsChatOpen(!isChatOpen);
           setIsParticipantsOpen(false);
         }}
-        onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
+        isWhiteboardOpen={isWhiteboardOpen}
+        onToggleWhiteboard={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
         onOpenSecurityModal={() => setIsSecurityOpen(true)}
         onSendReaction={handleSendReaction}
         onLeaveMeeting={handleLeaveMeeting}

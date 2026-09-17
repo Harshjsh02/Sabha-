@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { RoomSettings } from '@/lib/types';
-import { X, Shield, Lock, Unlock, Monitor, MessageSquare, Mic, AlertTriangle } from 'lucide-react';
+import { X, Shield, Lock, Unlock, Monitor, MessageSquare, Mic, AlertTriangle, Video } from 'lucide-react';
 
 interface HostControlModalProps {
   isOpen: boolean;
@@ -115,6 +115,23 @@ export function HostControlModal({
                   type="checkbox"
                   checked={roomSettings.allowUnmute}
                   onChange={(e) => onUpdateSettings({ allowUnmute: e.target.checked })}
+                  className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Require Cameras On (Force Video) */}
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-2.5 text-xs text-slate-200">
+                  <Video className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <span className="block font-medium">Require Cameras On</span>
+                    <span className="text-[10px] text-slate-400">Prevent participants from turning off video</span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={!!roomSettings.requireVideo}
+                  onChange={(e) => onUpdateSettings({ requireVideo: e.target.checked })}
                   className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
                 />
               </div>

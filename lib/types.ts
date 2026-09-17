@@ -29,6 +29,7 @@ export interface RoomSettings {
   allowScreenShare: boolean;
   allowChat: boolean;
   allowUnmute: boolean;
+  requireVideo?: boolean;
   createdAt: number;
   endedAt?: number;
 }

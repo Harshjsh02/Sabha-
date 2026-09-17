@@ -136,6 +136,18 @@ export function WhiteboardModal({
     }
   }, [incomingDrawEvent, performClear, drawSegment]);
 
+  // Close on Escape key press
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const getCanvasCoords = (
@@ -315,10 +327,11 @@ export function WhiteboardModal({
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition ml-1"
-            title="Close Whiteboard"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/20 active:scale-95 cursor-pointer ml-1"
+            title="Close Whiteboard (Esc)"
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            <X className="w-4 h-4" />
+            <span>Close Board</span>
           </button>
         </div>
       </div>
