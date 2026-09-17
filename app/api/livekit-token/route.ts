@@ -5,6 +5,7 @@ export async function GET(req: NextRequest) {
   const room = req.nextUrl.searchParams.get('room');
   const username = req.nextUrl.searchParams.get('username');
   const isHost = req.nextUrl.searchParams.get('isHost') === 'true';
+  const photoURL = req.nextUrl.searchParams.get('photoURL');
 
   if (!room || !username) {
     return NextResponse.json({ error: 'Missing room or username' }, { status: 400 });
@@ -22,9 +23,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const metadataObj = {
+      photoURL: photoURL || null,
+      name: username,
+    };
+
     const at = new AccessToken(apiKey, apiSecret, {
       identity: username,
       name: username,
+      metadata: JSON.stringify(metadataObj),
     });
 
     at.addGrant({

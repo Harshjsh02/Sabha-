@@ -40,11 +40,17 @@ export function VideoTile({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [participant.photoURL]);
 
   // Check if participant has a live video track
+  const isVideoAllowed = Boolean(participant.videoEnabled || participant.screenSharing);
   const hasLiveVideoTrack = Boolean(
     stream &&
-      (participant.videoEnabled || participant.screenSharing) &&
+      isVideoAllowed &&
       stream.getVideoTracks().some(
         (t) => t.readyState === 'live' && (isLocal ? t.enabled : true)
       )
@@ -62,8 +68,11 @@ export function VideoTile({
       videoEl.play().catch((err) => {
         console.warn('Video playback notice:', err);
       });
-    } else if (!hasLiveVideoTrack && videoEl.srcObject) {
-      videoEl.srcObject = null;
+    } else if (!hasLiveVideoTrack) {
+      if (videoEl.srcObject) {
+        videoEl.srcObject = null;
+      }
+      videoEl.pause();
     }
   }, [stream, hasLiveVideoTrack]);
 
@@ -85,8 +94,10 @@ export function VideoTile({
 
   const initials = participant.name
     ? participant.name
-        .split(' ')
+        .trim()
+        .split(/\s+/)
         .map((n) => n[0])
+        .filter(Boolean)
         .slice(0, 2)
         .join('')
         .toUpperCase()
@@ -129,13 +140,15 @@ export function VideoTile({
 
       {/* Avatar Fallback */}
       {!hasLiveVideoTrack && (
-        <div className="flex flex-col items-center justify-center p-4">
-          <div className="relative">
-            {participant.photoURL ? (
+        <div className="flex flex-col items-center justify-center p-4 select-none">
+          <div className="relative flex items-center justify-center">
+            {participant.photoURL && !imageError ? (
               <img
                 src={participant.photoURL}
                 alt={participant.name}
-                className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover ring-4 ring-slate-800"
+                onError={() => setImageError(true)}
+                referrerPolicy="no-referrer"
+                className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover ring-4 ring-slate-800 shadow-xl"
               />
             ) : (
               <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-amber-400 font-bold text-2xl md:text-3xl ring-4 ring-slate-800/80 shadow-inner">

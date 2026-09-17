@@ -31,6 +31,7 @@ export class LiveKitRoomManager {
   private remoteMediaStreams: Map<string, MediaStream> = new Map();
   private remoteScreenStreams: Map<string, MediaStream> = new Map();
   private localMediaStream: MediaStream = new MediaStream();
+  private participantStateOverrides: Map<string, Partial<Participant>> = new Map();
 
   constructor(wsUrl: string, token: string, localParticipantInfo: Participant) {
     this.wsUrl = (wsUrl || '').trim();
@@ -164,6 +165,11 @@ export class LiveKitRoomManager {
       this.syncParticipants();
     });
 
+    // Participant metadata changed (e.g. photoURL updated)
+    this.room.on(RoomEvent.ParticipantMetadataChanged, () => {
+      this.syncParticipants();
+    });
+
     // Active speakers changed
     this.room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
       const ids = speakers.map((s) => s.identity);
@@ -179,6 +185,12 @@ export class LiveKitRoomManager {
         if (data.type === 'kick-command' || data.type === 'end-meeting') {
           const reason = data.payload?.reason || (data.type === 'end-meeting' ? 'meeting-ended' : 'kicked');
           this.onKicked(reason);
+          return;
+        }
+        if (data.type === 'participant-state-update' && data.participantId) {
+          const current = this.participantStateOverrides.get(data.participantId) || {};
+          this.participantStateOverrides.set(data.participantId, { ...current, ...data.updates });
+          this.syncParticipants();
           return;
         }
         this.onDataReceived(data, participant?.identity || '');
@@ -200,6 +212,16 @@ export class LiveKitRoomManager {
 
   public async connect(): Promise<void> {
     await this.room.connect(this.wsUrl, this.token);
+    if (this.room.localParticipant) {
+      try {
+        await this.room.localParticipant.setMetadata(
+          JSON.stringify({
+            photoURL: this.localParticipantInfo.photoURL || null,
+            uid: this.localParticipantInfo.uid,
+          })
+        );
+      } catch {}
+    }
     this.syncParticipants();
   }
 
@@ -307,6 +329,12 @@ export class LiveKitRoomManager {
           }
         }
       }
+
+      this.sendData({
+        type: 'participant-state-update',
+        participantId: this.localParticipantInfo.id,
+        updates: { audioEnabled: enabled },
+      });
     } catch (err) {
       console.warn('Microphone toggle warning:', err);
     }
@@ -341,6 +369,12 @@ export class LiveKitRoomManager {
           }
         }
       }
+
+      this.sendData({
+        type: 'participant-state-update',
+        participantId: this.localParticipantInfo.id,
+        updates: { videoEnabled: enabled },
+      });
     } catch (err) {
       console.warn('Camera toggle warning:', err);
     }
@@ -386,21 +420,35 @@ export class LiveKitRoomManager {
 
     // Add remote participants
     this.room.remoteParticipants.forEach((rp) => {
-      const hasAudio = rp.isMicrophoneEnabled;
-      const mediaStream = this.remoteMediaStreams.get(rp.identity);
-      const hasStreamVideo = Boolean(
-        mediaStream && mediaStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled)
-      );
-      const hasVideo = rp.isCameraEnabled || hasStreamVideo;
+      let photoURL: string | null = null;
+      if (rp.metadata) {
+        try {
+          const meta = JSON.parse(rp.metadata);
+          if (meta?.photoURL) photoURL = meta.photoURL;
+        } catch {}
+      }
+
+      const camPub = rp.getTrackPublication(Track.Source.Camera);
+      const isCamMuted = camPub ? camPub.isMuted : true;
+      const calculatedHasVideo = Boolean(rp.isCameraEnabled && !isCamMuted);
+
+      const micPub = rp.getTrackPublication(Track.Source.Microphone);
+      const isMicMuted = micPub ? micPub.isMuted : true;
+      const calculatedHasAudio = Boolean(rp.isMicrophoneEnabled && !isMicMuted);
+
+      const override = this.participantStateOverrides.get(rp.identity);
+      const hasVideo = override?.videoEnabled !== undefined ? override.videoEnabled : calculatedHasVideo;
+      const hasAudio = override?.audioEnabled !== undefined ? override.audioEnabled : calculatedHasAudio;
 
       list.push({
         id: rp.identity,
         uid: rp.identity,
         name: rp.name || rp.identity,
+        photoURL: photoURL,
         isHost: false, // coordinated via Firestore roomSettings
         audioEnabled: hasAudio,
         videoEnabled: hasVideo,
-        screenSharing: rp.isScreenShareEnabled,
+        screenSharing: Boolean(rp.isScreenShareEnabled),
         isHandRaised: false,
         isMutedByHost: false,
         joinedAt: rp.joinedAt ? rp.joinedAt.getTime() : Date.now(),

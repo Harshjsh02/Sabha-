@@ -37,6 +37,7 @@ export class WebRTCManager {
   private isPolite: Map<string, boolean> = new Map();
   private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private cachedParticipants: Participant[] = [];
 
   // Callbacks
   public onRemoteStreamAdded: (peerId: string, stream: MediaStream) => void = () => {};
@@ -132,15 +133,16 @@ export class WebRTCManager {
           }
           list.push(p);
         });
+        this.cachedParticipants = list;
         this.onParticipantsChanged(list);
         this.reconcilePeers(list);
       });
 
-      // 3. Listen to incoming signals directed to me
+      // 3. Listen to incoming signals directed to me or broadcast
       const signalsCol = collection(db, `rooms/${this.roomId}/signals`);
       const q = query(
         signalsCol,
-        where('to', '==', this.localParticipant.id)
+        where('to', 'in', [this.localParticipant.id, 'broadcast'])
       );
 
       this.unsubSignals = onSnapshot(q, (snapshot) => {
@@ -362,6 +364,15 @@ export class WebRTCManager {
       return;
     }
 
+    if ((signal.type as any) === 'participant-update') {
+      const updates = signal.payload as Partial<Participant>;
+      this.cachedParticipants = this.cachedParticipants.map((p) =>
+        p.id === fromPeerId ? { ...p, ...updates } : p
+      );
+      this.onParticipantsChanged(this.cachedParticipants);
+      return;
+    }
+
     let pc = this.peerConnections.get(fromPeerId);
     if (!pc) {
       // Other peer initiated connection
@@ -482,6 +493,15 @@ export class WebRTCManager {
 
   public async updateParticipantState(updates: Partial<Participant>) {
     Object.assign(this.localParticipant, updates);
+
+    // 1. Broadcast immediately to peers for instant 0ms UI update
+    this.sendSignal({
+      from: this.localParticipant.id,
+      to: 'broadcast',
+      type: 'participant-update' as any,
+      payload: updates,
+      timestamp: Date.now(),
+    });
 
     if (isFirebaseConfigured() && db) {
       try {

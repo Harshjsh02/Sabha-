@@ -99,12 +99,6 @@ export function MeetingRoom({
   const [copiedLink, setCopiedLink] = useState(false);
   const [isLiveKitSFU, setIsLiveKitSFU] = useState(false);
 
-  // Loading / Mutex states for audio/video toggling
-  const [isTogglingAudio, setIsTogglingAudio] = useState(false);
-  const [isTogglingVideo, setIsTogglingVideo] = useState(false);
-  const isTogglingAudioRef = useRef(false);
-  const isTogglingVideoRef = useRef(false);
-
   const rtcManagerRef = useRef<WebRTCManager | null>(null);
   const liveKitManagerRef = useRef<LiveKitRoomManager | null>(null);
   const activeCameraStreamRef = useRef<MediaStream | null>(initialStream || null);
@@ -148,7 +142,7 @@ export function MeetingRoom({
       try {
         const username = initialParticipant.name || initialParticipant.id;
         const res = await fetch(
-          `/api/livekit-token?room=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&isHost=${isVerifiedHost}`
+          `/api/livekit-token?room=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&isHost=${isVerifiedHost}&photoURL=${encodeURIComponent(initialParticipant.photoURL || '')}`
         );
 
         if (res.ok) {
@@ -382,8 +376,6 @@ export function MeetingRoom({
 
   // Toggle Audio
   const handleToggleAudio = async () => {
-    if (isTogglingAudioRef.current) return;
-
     if (roomSettings.allowUnmute === false && !localParticipant.isHost && !localParticipant.audioEnabled) {
       alert('The host has disabled participants from unmuting.');
       return;
@@ -397,9 +389,6 @@ export function MeetingRoom({
       localStream.getAudioTracks().forEach((t) => (t.enabled = nextState));
       setLocalStream(new MediaStream(localStream.getTracks()));
     }
-
-    isTogglingAudioRef.current = true;
-    setIsTogglingAudio(true);
 
     try {
       if (isLiveKitSFU && liveKitManagerRef.current) {
@@ -448,9 +437,6 @@ export function MeetingRoom({
       console.warn('Microphone toggle warning:', err);
       // Revert if failed
       setLocalParticipant((p) => ({ ...p, audioEnabled: !nextState }));
-    } finally {
-      isTogglingAudioRef.current = false;
-      setIsTogglingAudio(false);
     }
   };
 
@@ -481,8 +467,6 @@ export function MeetingRoom({
 
   // Toggle Video
   const handleToggleVideo = async () => {
-    if (isTogglingVideoRef.current) return;
-
     if (roomSettings.requireVideo && !localParticipant.isHost && localParticipant.videoEnabled) {
       alert('The host (सभापति) requires all participants to keep their camera on.');
       return;
@@ -496,9 +480,6 @@ export function MeetingRoom({
       localStream.getVideoTracks().forEach((t) => (t.enabled = nextState));
       setLocalStream(new MediaStream(localStream.getTracks()));
     }
-
-    isTogglingVideoRef.current = true;
-    setIsTogglingVideo(true);
 
     try {
       if (isLiveKitSFU && liveKitManagerRef.current) {
@@ -551,9 +532,6 @@ export function MeetingRoom({
       console.warn('Camera toggle warning:', err);
       // Revert if failed
       setLocalParticipant((p) => ({ ...p, videoEnabled: !nextState }));
-    } finally {
-      isTogglingVideoRef.current = false;
-      setIsTogglingVideo(false);
     }
   };
 
@@ -1112,8 +1090,6 @@ export function MeetingRoom({
         isHost={localParticipant.isHost}
         audioEnabled={localParticipant.audioEnabled}
         videoEnabled={localParticipant.videoEnabled}
-        isTogglingAudio={isTogglingAudio}
-        isTogglingVideo={isTogglingVideo}
         screenSharing={localParticipant.screenSharing}
         isHandRaised={localParticipant.isHandRaised}
         isRecording={isRecording}
