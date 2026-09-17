@@ -18,10 +18,10 @@ import { VideoGrid } from './VideoGrid';
 import { MeetingControls } from './MeetingControls';
 import { ChatPanel } from './ChatPanel';
 import { ParticipantsPanel } from './ParticipantsPanel';
-import { WhiteboardModal } from './WhiteboardModal';
+import { WhiteboardModal, WhiteboardDrawEvent } from './WhiteboardModal';
 import { HostControlModal } from './HostControlModal';
 import { ReactionsOverlay } from './ReactionsOverlay';
-import { Copy, Check, ShieldCheck, Clock, Zap } from 'lucide-react';
+import { Copy, Check, Clock, Zap } from 'lucide-react';
 
 interface MeetingRoomProps {
   roomId: string;
@@ -65,6 +65,7 @@ export function MeetingRoom({
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+  const [incomingDrawEvent, setIncomingDrawEvent] = useState<WhiteboardDrawEvent | null>(null);
 
   // Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -132,11 +133,22 @@ export function MeetingRoom({
               setRemoteParticipants(participants);
             };
 
+            // Whiteboard & data packets
+            lkManager.onDataReceived = (payload) => {
+              if (payload?.type === 'whiteboard') {
+                setIncomingDrawEvent(payload.event);
+              }
+            };
+
             await lkManager.connect();
-            await lkManager.publishLocalTracks(
+            const lkLocalStream = await lkManager.publishLocalTracks(
               initialParticipant.audioEnabled,
               initialParticipant.videoEnabled
             );
+
+            if (lkLocalStream && lkLocalStream.getTracks().length > 0) {
+              setLocalStream(lkLocalStream);
+            }
 
             setIsLiveKitSFU(true);
             connectedViaLiveKit = true;
@@ -235,9 +247,9 @@ export function MeetingRoom({
     }
   }, [isChatOpen]);
 
-  // Toggle Audio
+  // Toggle Audio (Fixed: only block if explicitly false)
   const handleToggleAudio = async () => {
-    if (!roomSettings.allowUnmute && !localParticipant.isHost && !localParticipant.audioEnabled) {
+    if (roomSettings.allowUnmute === false && !localParticipant.isHost && !localParticipant.audioEnabled) {
       alert('The host has disabled participants from unmuting.');
       return;
     }
@@ -245,7 +257,10 @@ export function MeetingRoom({
     const nextState = !localParticipant.audioEnabled;
 
     if (liveKitManagerRef.current) {
-      await liveKitManagerRef.current.setAudioEnabled(nextState);
+      const updatedStream = await liveKitManagerRef.current.setAudioEnabled(nextState);
+      if (updatedStream && updatedStream.getTracks().length > 0) {
+        setLocalStream(updatedStream);
+      }
     }
 
     if (localStream) {
@@ -261,7 +276,10 @@ export function MeetingRoom({
     const nextState = !localParticipant.videoEnabled;
 
     if (liveKitManagerRef.current) {
-      await liveKitManagerRef.current.setVideoEnabled(nextState);
+      const updatedStream = await liveKitManagerRef.current.setVideoEnabled(nextState);
+      if (updatedStream && updatedStream.getTracks().length > 0) {
+        setLocalStream(updatedStream);
+      }
     }
 
     if (localStream) {
@@ -274,7 +292,7 @@ export function MeetingRoom({
 
   // Toggle Screen Share
   const handleToggleScreenShare = async () => {
-    if (!roomSettings.allowScreenShare && !localParticipant.isHost && !localParticipant.screenSharing) {
+    if (roomSettings.allowScreenShare === false && !localParticipant.isHost && !localParticipant.screenSharing) {
       alert('The host has disabled screen sharing for participants.');
       return;
     }
@@ -288,9 +306,8 @@ export function MeetingRoom({
         screenStream.getTracks().forEach((t) => t.stop());
         setScreenStream(null);
       }
-      if (initialStream) {
-        rtcManagerRef.current?.setLocalStream(initialStream);
-        setLocalStream(initialStream);
+      if (liveKitManagerRef.current) {
+        setLocalStream(liveKitManagerRef.current.getLocalStream());
       }
       setLocalParticipant((p) => ({ ...p, screenSharing: false }));
       rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
@@ -327,6 +344,16 @@ export function MeetingRoom({
       } catch (err) {
         console.warn('Screen share canceled or failed:', err);
       }
+    }
+  };
+
+  // Broadcast Whiteboard stroke / clear
+  const handleBroadcastDraw = (drawEvent: WhiteboardDrawEvent) => {
+    if (liveKitManagerRef.current) {
+      liveKitManagerRef.current.sendData({
+        type: 'whiteboard',
+        event: drawEvent,
+      });
     }
   };
 
@@ -580,6 +607,8 @@ export function MeetingRoom({
       <WhiteboardModal
         isOpen={isWhiteboardOpen}
         onClose={() => setIsWhiteboardOpen(false)}
+        onBroadcastDraw={handleBroadcastDraw}
+        incomingDrawEvent={incomingDrawEvent}
       />
 
       <HostControlModal

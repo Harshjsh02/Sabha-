@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, LogIn, ArrowRight } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, LogIn, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 
 interface GreenRoomProps {
@@ -10,9 +10,8 @@ interface GreenRoomProps {
   onJoin: (name: string, audioEnabled: boolean, videoEnabled: boolean, stream: MediaStream | null) => void;
 }
 
-export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
-  const { user, signInWithGoogle } = useAuth();
-  const [name, setName] = useState(initialName || user?.displayName || '');
+export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
+  const { user, signInWithGoogle, loading } = useAuth();
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -23,14 +22,7 @@ export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Update name if user logs in
-  useEffect(() => {
-    if (user?.displayName && !name) {
-      setName(user.displayName);
-    }
-  }, [user]);
-
-  // Request initial media stream
+  // Request initial media stream for preview
   useEffect(() => {
     let localStream: MediaStream | null = null;
 
@@ -74,7 +66,7 @@ export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
           updateVolume();
         }
       } catch (err) {
-        console.warn('Could not acquire user media preview:', err);
+        console.warn('Could not acquire user media preview in GreenRoom:', err);
       }
     }
 
@@ -105,7 +97,10 @@ export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
 
   const handleJoinClick = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!user || !user.displayName) {
+      alert('Please sign in with Google to join the meeting.');
+      return;
+    }
 
     // Stop the preview audio context analyzer so it doesn't collide with in-meeting context
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -113,7 +108,12 @@ export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
       audioContextRef.current.close();
     }
 
-    onJoin(name.trim(), audioEnabled, videoEnabled, stream);
+    // Stop the preview tracks to free the mic/cam hardware locks for the meeting room
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    onJoin(user.displayName, audioEnabled, videoEnabled, null);
   };
 
   return (
@@ -133,7 +133,7 @@ export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
             ) : (
               <div className="flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                 <div className="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-2xl font-bold text-slate-400 mb-3">
-                  {name ? name.charAt(0).toUpperCase() : 'U'}
+                  {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
                 </div>
                 <p className="text-xs font-medium text-slate-400">Camera is turned off</p>
               </div>
@@ -195,43 +195,68 @@ export function GreenRoom({ roomId, initialName, onJoin }: GreenRoomProps) {
             </p>
           </div>
 
-          <form onSubmit={handleJoinClick} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Your Display Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Harshita Sharma"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            {!user && (
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center gap-2 transition"
-                >
-                  <LogIn className="w-4 h-4 text-amber-400" />
-                  <span>Sign in with Google (Optional)</span>
-                </button>
+          {!user ? (
+            /* Login Mandatory Card */
+            <div className="space-y-5">
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3">
+                <Lock className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-200 text-sm">Google Login Required</p>
+                  <p className="mt-1 text-slate-300 leading-relaxed">
+                    To prevent impersonation and keep meetings safe, all participants must sign in with Google before entering Sabha.
+                  </p>
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={!name.trim()}
-              className="w-full py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-50 text-slate-950 font-bold text-sm shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 transition transform active:scale-98"
-            >
-              <span>Join Sabha Meeting</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </form>
+              <button
+                type="button"
+                onClick={signInWithGoogle}
+                disabled={loading}
+                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm flex items-center justify-center gap-3 transition shadow-xl"
+              >
+                <LogIn className="w-4 h-4 text-slate-900" />
+                <span>Sign in with Google to Enter</span>
+              </button>
+            </div>
+          ) : (
+            /* Verified User Profile Card */
+            <form onSubmit={handleJoinClick} className="space-y-5">
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-medium text-slate-400">Authenticated Identity</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    <ShieldCheck className="w-3 h-3" /> Verified Google ID
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName}
+                      className="w-10 h-10 rounded-full border border-amber-500/40 object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm border border-amber-500/30">
+                      {user.displayName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-white truncate">{user.displayName}</p>
+                    <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold text-sm shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 transition transform active:scale-98 cursor-pointer"
+              >
+                <span>Join Sabha Meeting</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

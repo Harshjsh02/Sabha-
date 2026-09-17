@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, loginWithGoogle, logoutUser, isFirebaseConfigured } from './firebase';
+import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { auth, db, loginWithGoogle, logoutUser, isFirebaseConfigured } from './firebase';
 import { UserProfile } from './types';
 
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInAsGuest: (displayName: string) => void;
   signOut: () => Promise<void>;
   isFirebaseReady: boolean;
 }
@@ -18,10 +18,60 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
-  signInAsGuest: () => {},
   signOut: async () => {},
   isFirebaseReady: false,
 });
+
+async function logUserIpAndSession(firebaseUser: User) {
+  try {
+    const res = await fetch('/api/auth/record-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const ip = data.ip || '127.0.0.1';
+      const userAgent = data.userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown');
+
+      // Update Firestore with IP address
+      if (isFirebaseConfigured() && db) {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        await setDoc(
+          userRef,
+          {
+            uid: firebaseUser.uid,
+            displayName: firebaseUser.displayName,
+            email: firebaseUser.email,
+            photoURL: firebaseUser.photoURL,
+            lastLoginIp: ip,
+            lastLoginAt: Date.now(),
+            userAgent,
+          },
+          { merge: true }
+        );
+
+        // Append to audit log collection
+        const loginLogsCol = collection(db, 'user_logins');
+        await addDoc(loginLogsCol, {
+          uid: firebaseUser.uid,
+          displayName: firebaseUser.displayName,
+          email: firebaseUser.email,
+          ip,
+          userAgent,
+          timestamp: Date.now(),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to record user login IP:', err);
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -32,33 +82,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ready = isFirebaseConfigured();
     setIsFirebaseReady(ready);
 
-    // Check localStorage for saved guest session
-    const savedGuest = localStorage.getItem('sabha_guest_user');
-    if (savedGuest) {
-      try {
-        const guestData = JSON.parse(savedGuest);
-        setUser(guestData);
-        setLoading(false);
-      } catch {}
+    // Clear any previous legacy guest sessions
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('sabha_guest_user');
     }
 
     if (ready && auth) {
-      const unsub = onAuthStateChanged(auth, (firebaseUser: User | null) => {
+      const unsub = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
         if (firebaseUser) {
           const profile: UserProfile = {
             uid: firebaseUser.uid,
-            displayName: firebaseUser.displayName || 'Sabha Participant',
+            displayName: firebaseUser.displayName || 'Sabha Member',
             email: firebaseUser.email,
             photoURL: firebaseUser.photoURL,
-            isAnonymous: firebaseUser.isAnonymous,
+            isAnonymous: false,
           };
           setUser(profile);
-          localStorage.removeItem('sabha_guest_user');
+
+          // Record IP and session in background
+          logUserIpAndSession(firebaseUser);
         } else {
-          // If no firebase user, fall back to guest if present
-          if (!localStorage.getItem('sabha_guest_user')) {
-            setUser(null);
-          }
+          setUser(null);
         }
         setLoading(false);
       });
@@ -78,20 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const handleGuestSignIn = (displayName: string) => {
-    const guestUser: UserProfile = {
-      uid: 'guest_' + Math.random().toString(36).substring(2, 9),
-      displayName: displayName.trim() || 'Guest',
-      email: null,
-      photoURL: null,
-      isAnonymous: true,
-    };
-    setUser(guestUser);
-    localStorage.setItem('sabha_guest_user', JSON.stringify(guestUser));
-  };
-
   const handleSignOut = async () => {
-    localStorage.removeItem('sabha_guest_user');
     setUser(null);
     if (auth) {
       await logoutUser();
@@ -104,7 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         signInWithGoogle: handleGoogleSignIn,
-        signInAsGuest: handleGuestSignIn,
         signOut: handleSignOut,
         isFirebaseReady,
       }}

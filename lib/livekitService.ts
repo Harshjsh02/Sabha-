@@ -20,6 +20,7 @@ export class LiveKitRoomManager {
   public onRemoteStreamRemoved: (peerId: string) => void = () => {};
   public onParticipantsChanged: (participants: Participant[]) => void = () => {};
   public onActiveSpeakersChanged: (speakerIds: string[]) => void = () => {};
+  public onDataReceived: (payload: any, peerId: string) => void = () => {};
   public onKicked: () => void = () => {};
 
   private remoteMediaStreams: Map<string, MediaStream> = new Map();
@@ -93,6 +94,18 @@ export class LiveKitRoomManager {
       this.onActiveSpeakersChanged(ids);
     });
 
+    // Real-time DataChannel (Whiteboard, gestures, sync)
+    this.room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: RemoteParticipant) => {
+      try {
+        const decoder = new TextDecoder();
+        const str = decoder.decode(payload);
+        const data = JSON.parse(str);
+        this.onDataReceived(data, participant?.identity || '');
+      } catch (err) {
+        console.warn('Failed to parse received data packet:', err);
+      }
+    });
+
     // Room disconnected
     this.room.on(RoomEvent.Disconnected, () => {
       this.remoteMediaStreams.clear();
@@ -105,25 +118,46 @@ export class LiveKitRoomManager {
   }
 
   public async publishLocalTracks(audioEnabled: boolean, videoEnabled: boolean): Promise<MediaStream> {
-    const localTracks = await this.room.localParticipant.setCameraEnabled(videoEnabled);
-    await this.room.localParticipant.setMicrophoneEnabled(audioEnabled);
+    try {
+      if (videoEnabled) {
+        await this.room.localParticipant.setCameraEnabled(true);
+      }
+      if (audioEnabled) {
+        await this.room.localParticipant.setMicrophoneEnabled(true);
+      }
+    } catch (err) {
+      console.warn('Initial track publication warning:', err);
+    }
 
+    return this.getLocalStream();
+  }
+
+  public getLocalStream(): MediaStream {
     const localStream = new MediaStream();
     this.room.localParticipant.trackPublications.forEach((pub) => {
       if (pub.track?.mediaStreamTrack) {
         localStream.addTrack(pub.track.mediaStreamTrack);
       }
     });
-
     return localStream;
   }
 
-  public async setAudioEnabled(enabled: boolean): Promise<void> {
-    await this.room.localParticipant.setMicrophoneEnabled(enabled);
+  public async setAudioEnabled(enabled: boolean): Promise<MediaStream> {
+    try {
+      await this.room.localParticipant.setMicrophoneEnabled(enabled);
+    } catch (err) {
+      console.error('Error toggling microphone in LiveKit:', err);
+    }
+    return this.getLocalStream();
   }
 
-  public async setVideoEnabled(enabled: boolean): Promise<void> {
-    await this.room.localParticipant.setCameraEnabled(enabled);
+  public async setVideoEnabled(enabled: boolean): Promise<MediaStream> {
+    try {
+      await this.room.localParticipant.setCameraEnabled(enabled);
+    } catch (err) {
+      console.error('Error toggling camera in LiveKit:', err);
+    }
+    return this.getLocalStream();
   }
 
   public async setScreenShareEnabled(enabled: boolean): Promise<MediaStream | null> {
@@ -139,6 +173,16 @@ export class LiveKitRoomManager {
     return null;
   }
 
+  public async sendData(payload: any): Promise<void> {
+    try {
+      const str = JSON.stringify(payload);
+      const encoder = new TextEncoder();
+      await this.room.localParticipant.publishData(encoder.encode(str), { reliable: true });
+    } catch (err) {
+      console.warn('Failed to publish data message in LiveKit:', err);
+    }
+  }
+
   private syncParticipants() {
     const list: Participant[] = [];
 
@@ -151,7 +195,7 @@ export class LiveKitRoomManager {
         id: rp.identity,
         uid: rp.identity,
         name: rp.name || rp.identity,
-        isHost: false, // will be coordinated via Firestore roomSettings
+        isHost: false, // coordinated via Firestore roomSettings
         audioEnabled: hasAudio,
         videoEnabled: hasVideo,
         screenSharing: rp.isScreenShareEnabled,

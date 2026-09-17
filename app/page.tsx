@@ -37,14 +37,29 @@ export default function HomePage() {
     return `sabha-${part1}-${part2}`;
   };
 
-  const handleStartMeeting = () => {
+  const handleStartMeeting = async () => {
+    if (!user) {
+      try {
+        await signInWithGoogle();
+      } catch {
+        return;
+      }
+    }
     const newRoomId = generateMeetingCode();
     router.push(`/room/${newRoomId}?host=true`);
   };
 
-  const handleJoinMeeting = (e: React.FormEvent) => {
+  const handleJoinMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCode.trim()) return;
+
+    if (!user) {
+      try {
+        await signInWithGoogle();
+      } catch {
+        return;
+      }
+    }
 
     // Handle full URL or raw code
     let cleanedCode = joinCode.trim();
