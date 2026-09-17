@@ -28,6 +28,7 @@ interface MeetingControlsProps {
   isHandRaised: boolean;
   isRecording: boolean;
   participantCount: number;
+  waitingCount?: number;
   unreadChatCount: number;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
@@ -53,6 +54,7 @@ export function MeetingControls({
   isHandRaised,
   isRecording,
   participantCount,
+  waitingCount = 0,
   unreadChatCount,
   onToggleAudio,
   onToggleVideo,
@@ -172,9 +174,16 @@ export function MeetingControls({
         >
           <Users className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1" />
           <span className="text-[9px] sm:text-[10px] font-medium hidden sm:inline">People</span>
-          <span className="absolute top-1 right-1 px-1.5 py-0.2 bg-slate-800 border border-slate-700 text-amber-400 text-[9px] font-bold rounded-full">
-            {participantCount}
-          </span>
+          {waitingCount > 0 ? (
+            <span className="absolute top-0.5 right-0.5 px-1.5 py-0.2 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full flex items-center gap-0.5 shadow-md shadow-amber-500/30 animate-pulse">
+              <span>{participantCount}</span>
+              <span className="bg-slate-950 text-amber-400 text-[8px] px-1 rounded-full">+{waitingCount}</span>
+            </span>
+          ) : (
+            <span className="absolute top-1 right-1 px-1.5 py-0.2 bg-slate-800 border border-slate-700 text-amber-400 text-[9px] font-bold rounded-full">
+              {participantCount}
+            </span>
+          )}
         </button>
 
         {/* In-Meeting Chat */}

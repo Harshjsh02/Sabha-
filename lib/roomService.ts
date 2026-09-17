@@ -4,6 +4,7 @@ import {
   setDoc,
   getDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   addDoc,
   query,
@@ -11,7 +12,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
-import { ChatMessage, ReactionItem, RoomSettings } from './types';
+import { ChatMessage, ReactionItem, RoomSettings, WaitingParticipant } from './types';
 
 export async function createRoom(
   roomId: string,
@@ -28,6 +29,8 @@ export async function createRoom(
     allowChat: true,
     allowUnmute: true,
     requireVideo: false,
+    waitingRoomEnabled: true,
+    hostJoined: false,
     createdAt: Date.now(),
   };
 
@@ -60,6 +63,8 @@ export async function getOrCreateRoom(
     allowChat: true,
     allowUnmute: true,
     requireVideo: false,
+    waitingRoomEnabled: true,
+    hostJoined: false,
     createdAt: Date.now(),
   };
 
@@ -234,4 +239,239 @@ export function subscribeToReactions(
   return () => {
     if (broadcastChannel) broadcastChannel.close();
   };
+}
+
+// ----------------------------------------------------
+// WAITING ROOM & KNOCKING SYSTEM
+// ----------------------------------------------------
+
+/**
+ * Attendee requests to enter the waiting room (knocks)
+ */
+export async function requestToJoinWaitingRoom(
+  roomId: string,
+  participant: WaitingParticipant
+): Promise<void> {
+  // 1. BroadcastChannel notice
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+      channel.postMessage({ type: 'knock', participant });
+      channel.close();
+    } catch {}
+  }
+
+  // 2. Firestore document
+  if (isFirebaseConfigured() && db) {
+    try {
+      const waitRef = doc(db, `rooms/${roomId}/waitingRoom/${participant.id}`);
+      await setDoc(waitRef, participant);
+    } catch (err) {
+      console.warn('Error saving waiting room request to Firestore:', err);
+    }
+  }
+}
+
+/**
+ * Attendee cancels their waiting request / leaves
+ */
+export async function leaveWaitingRoom(
+  roomId: string,
+  participantId: string
+): Promise<void> {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+      channel.postMessage({ type: 'cancel', participantId });
+      channel.close();
+    } catch {}
+  }
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      const waitRef = doc(db, `rooms/${roomId}/waitingRoom/${participantId}`);
+      await deleteDoc(waitRef);
+    } catch (err) {
+      console.warn('Error deleting waiting room request:', err);
+    }
+  }
+}
+
+/**
+ * Host subscribes to the waiting room roster in real time
+ */
+export function subscribeToWaitingRoom(
+  roomId: string,
+  callback: (waitingList: WaitingParticipant[]) => void
+): () => void {
+  let broadcastChannel: BroadcastChannel | null = null;
+  let waitingMap = new Map<string, WaitingParticipant>();
+
+  const emit = () => {
+    const list = Array.from(waitingMap.values()).filter((p) => p.status === 'waiting');
+    callback(list);
+  };
+
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    broadcastChannel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+    broadcastChannel.onmessage = (event) => {
+      const msg = event.data;
+      if (msg?.type === 'knock' && msg.participant) {
+        waitingMap.set(msg.participant.id, msg.participant);
+        emit();
+      } else if (msg?.type === 'cancel' && msg.participantId) {
+        waitingMap.delete(msg.participantId);
+        emit();
+      } else if ((msg?.type === 'admit' || msg?.type === 'deny') && msg.participantId) {
+        waitingMap.delete(msg.participantId);
+        emit();
+      }
+    };
+  }
+
+  if (isFirebaseConfigured() && db) {
+    const waitCol = collection(db, `rooms/${roomId}/waitingRoom`);
+    const unsub = onSnapshot(waitCol, (snapshot) => {
+      const list: WaitingParticipant[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data() as WaitingParticipant;
+        if (data && data.status === 'waiting') {
+          list.push(data);
+          waitingMap.set(data.id, data);
+        } else {
+          waitingMap.delete(d.id);
+        }
+      });
+      callback(list);
+    });
+
+    return () => {
+      unsub();
+      if (broadcastChannel) broadcastChannel.close();
+    };
+  }
+
+  return () => {
+    if (broadcastChannel) broadcastChannel.close();
+  };
+}
+
+/**
+ * Attendee listens to their own admission status ('waiting' | 'admitted' | 'denied')
+ */
+export function subscribeToWaitingStatus(
+  roomId: string,
+  participantId: string,
+  callback: (status: 'waiting' | 'admitted' | 'denied') => void
+): () => void {
+  let broadcastChannel: BroadcastChannel | null = null;
+
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    broadcastChannel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+    broadcastChannel.onmessage = (event) => {
+      const msg = event.data;
+      if (msg?.participantId === participantId) {
+        if (msg.type === 'admit') callback('admitted');
+        if (msg.type === 'deny') callback('denied');
+      }
+    };
+  }
+
+  if (isFirebaseConfigured() && db) {
+    const waitRef = doc(db, `rooms/${roomId}/waitingRoom/${participantId}`);
+    const unsub = onSnapshot(waitRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as WaitingParticipant;
+        if (data?.status) {
+          callback(data.status);
+        }
+      }
+    });
+
+    return () => {
+      unsub();
+      if (broadcastChannel) broadcastChannel.close();
+    };
+  }
+
+  return () => {
+    if (broadcastChannel) broadcastChannel.close();
+  };
+}
+
+/**
+ * Host admits a waiting participant
+ */
+export async function admitParticipant(
+  roomId: string,
+  participantId: string
+): Promise<void> {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+      channel.postMessage({ type: 'admit', participantId });
+      channel.close();
+    } catch {}
+  }
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      const waitRef = doc(db, `rooms/${roomId}/waitingRoom/${participantId}`);
+      await updateDoc(waitRef, { status: 'admitted' });
+    } catch (err) {
+      console.warn('Error admitting participant:', err);
+    }
+  }
+}
+
+/**
+ * Host admits all waiting participants at once
+ */
+export async function admitAllParticipants(
+  roomId: string,
+  participantIds: string[]
+): Promise<void> {
+  await Promise.all(participantIds.map((id) => admitParticipant(roomId, id)));
+}
+
+/**
+ * Host denies a waiting participant
+ */
+export async function denyParticipant(
+  roomId: string,
+  participantId: string
+): Promise<void> {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+      channel.postMessage({ type: 'deny', participantId });
+      channel.close();
+    } catch {}
+  }
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      const waitRef = doc(db, `rooms/${roomId}/waitingRoom/${participantId}`);
+      await updateDoc(waitRef, { status: 'denied' });
+    } catch (err) {
+      console.warn('Error denying participant:', err);
+    }
+  }
+}
+
+/**
+ * Update host presence in the meeting
+ */
+export async function updateHostPresence(
+  roomId: string,
+  hostJoined: boolean
+): Promise<void> {
+  await updateRoomSettings(roomId, { hostJoined });
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel(`sabha_waiting_${roomId}`);
+      channel.postMessage({ type: 'host-presence', hostJoined });
+      channel.close();
+    } catch {}
+  }
 }

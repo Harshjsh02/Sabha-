@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { RoomSettings } from '@/lib/types';
-import { X, Shield, Lock, Unlock, Monitor, MessageSquare, Mic, AlertTriangle, Video } from 'lucide-react';
+import { X, Shield, Lock, Unlock, Monitor, MessageSquare, Mic, AlertTriangle, Video, Users } from 'lucide-react';
 
 interface HostControlModalProps {
   isOpen: boolean;
@@ -68,6 +68,35 @@ export function HostControlModal({
               }`}
             >
               {roomSettings.isLocked ? 'Unlock' : 'Lock'}
+            </button>
+          </div>
+
+          {/* Waiting Room Policy Toggle */}
+          <div className="flex items-center justify-between p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-amber-400" />
+              <div>
+                <p className="font-semibold text-xs text-white">Enable Waiting Room</p>
+                <p className="text-[11px] text-slate-400">
+                  {roomSettings.waitingRoomEnabled !== false
+                    ? 'Attendees must be admitted by host'
+                    : 'Attendees join immediately when host is present'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() =>
+                onUpdateSettings({
+                  waitingRoomEnabled: roomSettings.waitingRoomEnabled === false ? true : false,
+                })
+              }
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                roomSettings.waitingRoomEnabled !== false
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              {roomSettings.waitingRoomEnabled !== false ? 'Enabled' : 'Disabled'}
             </button>
           </div>
 

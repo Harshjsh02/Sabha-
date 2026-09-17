@@ -78,6 +78,7 @@
 - [x] **TASK-710:** Implement multi-channel Web Audio API mixer (`AudioContext` + `createMediaStreamDestination`) to blend screen video with the presenter's microphone voice, computer audio, and remote peer speech into a synchronized WebM download.
 - [x] **TASK-711:** Add prominent floating "Close Board" button directly on canvas surface in `WhiteboardModal.tsx` and fix flexbox viewport height constraints.
 - [x] **TASK-712:** Implement Zoom-style Leave & End Meeting modal (`LeaveMeetingModal.tsx`) with Host options ("End Sabha for All" vs "Leave Sabha"), server-side room termination (`/api/room/leave` and LiveKit `deleteRoom`), attendee confirmation dialog, and graceful disconnection notifications.
+- [x] **TASK-713:** Implement Meeting Waiting Room & Knocking system (Zoom & Google Meet style): `WaitingRoom.tsx` lobby for attendees, real-time `WaitingRoomBanner.tsx` host notifications with `[Admit]`/`[Deny]`, `ParticipantsPanel` waiting roster with `[Admit all]`, and `HostControlModal` security toggle.
 
 ---
 

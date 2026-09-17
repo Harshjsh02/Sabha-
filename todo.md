@@ -5,6 +5,7 @@
 ---
 
 ## 🎯 Recently Completed
+- [x] Meeting Waiting Room & Knocking system (Zoom & Google Meet style): `WaitingRoom.tsx` lobby for attendees, real-time `WaitingRoomBanner.tsx` host notifications with `[Admit]`/`[Deny]`, `ParticipantsPanel` waiting roster with `[Admit all]`, and `HostControlModal` security toggle.
 - [x] Zoom-style "End Meeting for All" vs "Leave Meeting" options modal (`LeaveMeetingModal.tsx`) with server-side room teardown (`/api/room/leave` + LiveKit `deleteRoom`) and broadcast termination signals.
 - [x] Multi-source recording with microphone voice mixing via `AudioContext` and `RecordModal` options dialog.
 - [x] Prominent floating "Close Board" button directly on canvas surface in `WhiteboardModal.tsx` and flexbox overflow fix.

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Participant } from '@/lib/types';
+import { Participant, WaitingParticipant } from '@/lib/types';
 import {
   X,
   Users,
@@ -16,6 +16,7 @@ import {
   Lock,
   Unlock,
   UserPlus,
+  Check,
 } from 'lucide-react';
 
 interface ParticipantsPanelProps {
@@ -25,6 +26,10 @@ interface ParticipantsPanelProps {
   currentUserId: string;
   isHost: boolean;
   isLocked: boolean;
+  waitingList?: WaitingParticipant[];
+  onAdmit?: (id: string) => void;
+  onDeny?: (id: string) => void;
+  onAdmitAll?: (ids: string[]) => void;
   onMuteAll: () => void;
   onMuteParticipant: (id: string) => void;
   onKickParticipant: (id: string) => void;
@@ -39,6 +44,10 @@ export function ParticipantsPanel({
   currentUserId,
   isHost,
   isLocked,
+  waitingList = [],
+  onAdmit,
+  onDeny,
+  onAdmitAll,
   onMuteAll,
   onMuteParticipant,
   onKickParticipant,
@@ -100,6 +109,67 @@ export function ParticipantsPanel({
             {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
             <span>{isLocked ? 'Locked' : 'Lock Room'}</span>
           </button>
+        </div>
+      )}
+
+      {/* Waiting Room Section (Host Only) */}
+      {isHost && waitingList.length > 0 && (
+        <div className="p-3 border-b border-amber-500/20 bg-amber-500/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
+              Waiting Room ({waitingList.length})
+            </span>
+            {onAdmitAll && waitingList.length > 1 && (
+              <button
+                onClick={() => onAdmitAll(waitingList.map((p) => p.id))}
+                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
+              >
+                Admit all
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+            {waitingList.map((waitUser) => (
+              <div
+                key={waitUser.id}
+                className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                    {waitUser.name ? waitUser.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="block text-xs font-semibold text-white truncate">
+                      {waitUser.name}
+                    </span>
+                    <span className="block text-[10px] text-slate-400">Waiting</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {onDeny && (
+                    <button
+                      onClick={() => onDeny(waitUser.id)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                      title="Deny"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {onAdmit && (
+                    <button
+                      onClick={() => onAdmit(waitUser.id)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer active:scale-95"
+                      title="Admit"
+                    >
+                      Admit
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

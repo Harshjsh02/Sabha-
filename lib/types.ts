@@ -20,6 +20,17 @@ export interface Participant {
   joinedAt: number;
 }
 
+export interface WaitingParticipant {
+  id: string; // peerId or uid
+  uid: string;
+  name: string;
+  photoURL?: string | null;
+  status: 'waiting' | 'admitted' | 'denied';
+  audioEnabled: boolean;
+  videoEnabled: boolean;
+  requestedAt: number;
+}
+
 export interface RoomSettings {
   roomId: string;
   hostId: string;
@@ -30,6 +41,8 @@ export interface RoomSettings {
   allowChat: boolean;
   allowUnmute: boolean;
   requireVideo?: boolean;
+  waitingRoomEnabled?: boolean;
+  hostJoined?: boolean;
   createdAt: number;
   endedAt?: number;
 }

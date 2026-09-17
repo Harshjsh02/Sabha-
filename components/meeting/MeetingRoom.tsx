@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Participant, RoomSettings, ChatMessage, ReactionItem } from '@/lib/types';
+import { Participant, RoomSettings, ChatMessage, ReactionItem, WaitingParticipant } from '@/lib/types';
 import { WebRTCManager } from '@/lib/webrtc';
 import { LiveKitRoomManager } from '@/lib/livekitService';
 import {
@@ -13,6 +13,11 @@ import {
   subscribeToChatMessages,
   sendReaction,
   subscribeToReactions,
+  subscribeToWaitingRoom,
+  admitParticipant,
+  denyParticipant,
+  admitAllParticipants,
+  updateHostPresence,
 } from '@/lib/roomService';
 import { useAuth } from '@/lib/authContext';
 import { VideoGrid } from './VideoGrid';
@@ -24,6 +29,7 @@ import { HostControlModal } from './HostControlModal';
 import { ShareMeetingModal } from './ShareMeetingModal';
 import { RecordModal } from './RecordModal';
 import { LeaveMeetingModal } from './LeaveMeetingModal';
+import { WaitingRoomBanner } from './WaitingRoomBanner';
 import { ReactionsOverlay } from './ReactionsOverlay';
 import { Copy, Check, Clock, Zap, Share2 } from 'lucide-react';
 
@@ -74,6 +80,7 @@ export function MeetingRoom({
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [waitingList, setWaitingList] = useState<WaitingParticipant[]>([]);
   const [incomingDrawEvent, setIncomingDrawEvent] = useState<WhiteboardDrawEvent | null>(null);
 
   // Recording State & Audio Mixing
@@ -123,6 +130,10 @@ export function MeetingRoom({
 
       if (active) {
         setLocalParticipant((prev) => ({ ...prev, isHost: isVerifiedHost }));
+      }
+
+      if (isVerifiedHost) {
+        updateHostPresence(roomId, true).catch(() => {});
       }
 
       // Check if room is locked and user is not verified host
@@ -323,6 +334,9 @@ export function MeetingRoom({
 
     // 6. Fast cleanup on app close, tab close, or navigation (beforeunload + pagehide)
     const handleCleanExit = () => {
+      if (initialParticipant.isHost) {
+        updateHostPresence(roomId, false).catch(() => {});
+      }
       if (liveKitManagerRef.current) {
         liveKitManagerRef.current.disconnect();
       }
@@ -349,6 +363,15 @@ export function MeetingRoom({
       unsubReactions();
     };
   }, [roomId, initialParticipant.id]);
+
+  // Subscribe to waiting room for host
+  useEffect(() => {
+    if (!localParticipant.isHost) return;
+    const unsub = subscribeToWaitingRoom(roomId, (list) => {
+      setWaitingList(list);
+    });
+    return () => unsub();
+  }, [roomId, localParticipant.isHost]);
 
   // Reset unread chat count when chat opens
   useEffect(() => {
@@ -878,8 +901,21 @@ export function MeetingRoom({
     updateRoomSettings(roomId, updates);
   };
 
+  const handleAdmitWaiting = async (participantId: string) => {
+    await admitParticipant(roomId, participantId);
+  };
+
+  const handleDenyWaiting = async (participantId: string) => {
+    await denyParticipant(roomId, participantId);
+  };
+
+  const handleAdmitAllWaiting = async (participantIds: string[]) => {
+    await admitAllParticipants(roomId, participantIds);
+  };
+
   const handleEndMeetingForAll = async () => {
     setIsLeaveModalOpen(false);
+    updateHostPresence(roomId, false).catch(() => {});
     // 1. Notify server with endForAll flag (closes LiveKit room and purges Firestore room participants)
     try {
       if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
@@ -912,6 +948,9 @@ export function MeetingRoom({
 
   const handleLeaveMeeting = async () => {
     setIsLeaveModalOpen(false);
+    if (localParticipant.isHost) {
+      updateHostPresence(roomId, false).catch(() => {});
+    }
     if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
       const payload = JSON.stringify({ roomId, participantId: localParticipant.id });
       navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
@@ -1009,6 +1048,20 @@ export function MeetingRoom({
 
       {/* Main Body: Video Grid + Side Panels */}
       <div className="flex-1 flex min-h-0 relative">
+        {/* Floating Host Knocking Notification Banner */}
+        {localParticipant.isHost && (
+          <WaitingRoomBanner
+            waitingList={waitingList}
+            onAdmit={handleAdmitWaiting}
+            onDeny={handleDenyWaiting}
+            onAdmitAll={handleAdmitAllWaiting}
+            onOpenParticipants={() => {
+              setIsParticipantsOpen(true);
+              setIsChatOpen(false);
+            }}
+          />
+        )}
+
         <VideoGrid
           localParticipant={localParticipant}
           localStream={localStream}
@@ -1042,6 +1095,10 @@ export function MeetingRoom({
           currentUserId={localParticipant.id}
           isHost={localParticipant.isHost}
           isLocked={roomSettings.isLocked}
+          waitingList={waitingList}
+          onAdmit={handleAdmitWaiting}
+          onDeny={handleDenyWaiting}
+          onAdmitAll={handleAdmitAllWaiting}
           onMuteAll={handleMuteAll}
           onMuteParticipant={handleMuteParticipant}
           onKickParticipant={handleKickParticipant}
@@ -1061,6 +1118,7 @@ export function MeetingRoom({
         isHandRaised={localParticipant.isHandRaised}
         isRecording={isRecording}
         participantCount={remoteParticipants.length + 1}
+        waitingCount={waitingList.length}
         unreadChatCount={unreadChatCount}
         onToggleAudio={handleToggleAudio}
         onToggleVideo={handleToggleVideo}
