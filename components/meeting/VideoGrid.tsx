@@ -16,6 +16,7 @@ interface VideoGridProps {
   isHostViewer: boolean;
   onMuteParticipant?: (id: string) => void;
   onKickParticipant?: (id: string) => void;
+  viewMode?: 'gallery' | 'speaker' | 'multi-speaker';
 }
 
 function ScreenPresentationStage({
@@ -112,6 +113,7 @@ export function VideoGrid({
   isHostViewer,
   onMuteParticipant,
   onKickParticipant,
+  viewMode = 'gallery',
 }: VideoGridProps) {
   const [pinnedId, setPinnedId] = useState<string | null>(null);
 
@@ -155,10 +157,10 @@ export function VideoGrid({
     ? localParticipant
     : remoteScreenPresenter || null;
 
-  // 1. Spotlight Presentation Stage (Active screen share takes primary spotlight)
+  // 1. Spotlight Presentation Stage (Active screen share takes primary spotlight across all view modes)
   if (isScreenSharingActive && presentationStream && presenter) {
     return (
-      <div className="flex-1 flex flex-col h-full gap-3 p-3 overflow-hidden">
+      <div className="flex-1 flex flex-col h-full gap-2.5 p-2 sm:p-3 overflow-hidden">
         {/* Main Presentation Stage */}
         <div className="flex-1 min-h-0 relative">
           <ScreenPresentationStage
@@ -170,9 +172,9 @@ export function VideoGrid({
         </div>
 
         {/* Participant Filmstrip Below Presentation */}
-        <div className="h-32 sm:h-36 flex gap-3 overflow-x-auto pb-1 flex-shrink-0">
+        <div className="h-28 sm:h-36 flex gap-2.5 overflow-x-auto pb-1 flex-shrink-0">
           {allParticipants.map((p) => (
-            <div key={p.id} className="w-44 sm:w-48 h-full flex-shrink-0">
+            <div key={p.id} className="w-40 sm:w-48 h-full flex-shrink-0">
               <VideoTile
                 participant={p}
                 stream={getStreamForParticipant(p.id)}
@@ -190,38 +192,43 @@ export function VideoGrid({
     );
   }
 
-  // 2. Speaker / Spotlight layout if someone is pinned
-  if (pinnedId) {
-    const pinnedParticipant = allParticipants.find((p) => p.id === pinnedId) || localParticipant;
-    const otherParticipants = allParticipants.filter((p) => p.id !== pinnedParticipant.id);
+  // 2. Speaker View Mode (or if user pinned someone)
+  if (viewMode === 'speaker' || (pinnedId && viewMode !== 'gallery')) {
+    const speaker = pinnedId
+      ? allParticipants.find((p) => p.id === pinnedId) || allParticipants[0]
+      : allParticipants.find((p) => p.id !== localParticipant.id && p.audioEnabled) ||
+        remoteParticipants[0] ||
+        localParticipant;
+
+    const otherParticipants = allParticipants.filter((p) => p.id !== speaker.id);
 
     return (
-      <div className="flex-1 flex flex-col h-full gap-3 p-3 overflow-hidden">
-        {/* Main Pinned Stage */}
+      <div className="flex-1 flex flex-col h-full gap-2.5 p-2 sm:p-3 overflow-hidden">
+        {/* Main Active Speaker Stage */}
         <div className="flex-1 min-h-0 relative">
           <VideoTile
-            participant={pinnedParticipant}
-            stream={getStreamForParticipant(pinnedParticipant.id)}
-            isLocal={pinnedParticipant.id === localParticipant.id}
+            participant={speaker}
+            stream={getStreamForParticipant(speaker.id)}
+            isLocal={speaker.id === localParticipant.id}
             isHostViewer={isHostViewer}
-            isPinned={true}
+            isPinned={pinnedId === speaker.id}
             onTogglePin={togglePin}
             onMuteParticipant={onMuteParticipant}
             onKickParticipant={onKickParticipant}
           />
         </div>
 
-        {/* Thumbnail Filmstrip */}
+        {/* Thumbnail Filmstrip of Other Participants */}
         {otherParticipants.length > 0 && (
-          <div className="h-36 flex gap-3 overflow-x-auto pb-1 flex-shrink-0">
+          <div className="h-28 sm:h-36 flex gap-2.5 overflow-x-auto pb-1 flex-shrink-0">
             {otherParticipants.map((p) => (
-              <div key={p.id} className="w-48 h-full flex-shrink-0">
+              <div key={p.id} className="w-40 sm:w-48 h-full flex-shrink-0">
                 <VideoTile
                   participant={p}
                   stream={getStreamForParticipant(p.id)}
                   isLocal={p.id === localParticipant.id}
                   isHostViewer={isHostViewer}
-                  isPinned={false}
+                  isPinned={pinnedId === p.id}
                   onTogglePin={togglePin}
                   onMuteParticipant={onMuteParticipant}
                   onKickParticipant={onKickParticipant}
@@ -234,28 +241,108 @@ export function VideoGrid({
     );
   }
 
+  // 3. Multi-Speaker View Mode (highlights top 2-4 speakers side-by-side with filmstrip)
+  if (viewMode === 'multi-speaker' && totalCount >= 3) {
+    // Sort participants: pinned first, then audio active, then others
+    const sorted = [...allParticipants].sort((a, b) => {
+      if (a.id === pinnedId) return -1;
+      if (b.id === pinnedId) return 1;
+      if (a.audioEnabled && !b.audioEnabled) return -1;
+      if (!a.audioEnabled && b.audioEnabled) return 1;
+      return 0;
+    });
+
+    const maxSpeakers = totalCount <= 4 ? 2 : 4;
+    const mainSpeakers = sorted.slice(0, maxSpeakers);
+    const filmstripParticipants = sorted.slice(maxSpeakers);
+
+    return (
+      <div className="flex-1 flex flex-col h-full gap-2.5 p-2 sm:p-3 overflow-hidden">
+        {/* Multi-Speaker Stage */}
+        <div className="flex-1 min-h-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 h-full auto-rows-fr">
+            {mainSpeakers.map((p) => (
+              <VideoTile
+                key={p.id}
+                participant={p}
+                stream={getStreamForParticipant(p.id)}
+                isLocal={p.id === localParticipant.id}
+                isHostViewer={isHostViewer}
+                isPinned={pinnedId === p.id}
+                onTogglePin={togglePin}
+                onMuteParticipant={onMuteParticipant}
+                onKickParticipant={onKickParticipant}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Filmstrip for remaining participants */}
+        {filmstripParticipants.length > 0 && (
+          <div className="h-28 sm:h-36 flex gap-2.5 overflow-x-auto pb-1 flex-shrink-0">
+            {filmstripParticipants.map((p) => (
+              <div key={p.id} className="w-40 sm:w-48 h-full flex-shrink-0">
+                <VideoTile
+                  participant={p}
+                  stream={getStreamForParticipant(p.id)}
+                  isLocal={p.id === localParticipant.id}
+                  isHostViewer={isHostViewer}
+                  isPinned={pinnedId === p.id}
+                  onTogglePin={togglePin}
+                  onMuteParticipant={onMuteParticipant}
+                  onKickParticipant={onKickParticipant}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 4. Gallery View Mode (Default Zoom Grid)
+  // Single participant layout
+  if (totalCount === 1) {
+    return (
+      <div className="flex-1 h-full p-3 sm:p-4 flex items-center justify-center overflow-hidden">
+        <div className="w-full max-w-4xl h-full max-h-[85vh]">
+          <VideoTile
+            participant={localParticipant}
+            stream={localStream}
+            isLocal={true}
+            isHostViewer={isHostViewer}
+            isPinned={false}
+            onTogglePin={togglePin}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // Adaptive Grid Layout based on participant count
   let gridClasses = 'grid-cols-1';
   if (totalCount === 2) {
-    gridClasses = 'grid-cols-1 md:grid-cols-2';
+    gridClasses = 'grid-cols-1 sm:grid-cols-2';
   } else if (totalCount >= 3 && totalCount <= 4) {
     gridClasses = 'grid-cols-1 sm:grid-cols-2';
   } else if (totalCount >= 5 && totalCount <= 6) {
-    gridClasses = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
-  } else if (totalCount > 6) {
+    gridClasses = 'grid-cols-2 sm:grid-cols-3';
+  } else if (totalCount >= 7 && totalCount <= 9) {
+    gridClasses = 'grid-cols-2 sm:grid-cols-3';
+  } else if (totalCount > 9) {
     gridClasses = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4';
   }
 
   return (
-    <div className="flex-1 h-full p-3 overflow-y-auto">
-      <div className={`grid ${gridClasses} gap-3 h-full auto-rows-fr`}>
+    <div className="flex-1 h-full p-2 sm:p-3 overflow-y-auto">
+      <div className={`grid ${gridClasses} gap-2.5 sm:gap-3 h-full auto-rows-fr`}>
         {/* Local user tile */}
         <VideoTile
           participant={localParticipant}
           stream={localStream}
           isLocal={true}
           isHostViewer={isHostViewer}
-          isPinned={false}
+          isPinned={pinnedId === localParticipant.id}
           onTogglePin={togglePin}
         />
 
@@ -267,7 +354,7 @@ export function VideoGrid({
             stream={remoteStreams.get(p.id) || null}
             isLocal={false}
             isHostViewer={isHostViewer}
-            isPinned={false}
+            isPinned={pinnedId === p.id}
             onTogglePin={togglePin}
             onMuteParticipant={onMuteParticipant}
             onKickParticipant={onKickParticipant}

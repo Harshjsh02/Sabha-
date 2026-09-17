@@ -31,7 +31,21 @@ import { RecordModal } from './RecordModal';
 import { LeaveMeetingModal } from './LeaveMeetingModal';
 import { WaitingRoomBanner } from './WaitingRoomBanner';
 import { ReactionsOverlay } from './ReactionsOverlay';
-import { Copy, Check, Clock, Zap, Share2 } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  Clock,
+  Zap,
+  Share2,
+  ShieldCheck,
+  ChevronDown,
+  LayoutTemplate,
+  LayoutGrid,
+  Grid2X2,
+  Maximize,
+  Minimize,
+  Lock,
+} from 'lucide-react';
 
 interface MeetingRoomProps {
   roomId: string;
@@ -94,10 +108,45 @@ export function MeetingRoom({
   const recordingDisplayStreamRef = useRef<MediaStream | null>(null);
   const recordingMicStreamRef = useRef<MediaStream | null>(null);
 
-  // Meeting duration timer
+  // Meeting duration timer & Zoom View mode state
   const [duration, setDuration] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isLiveKitSFU, setIsLiveKitSFU] = useState(false);
+
+  // Zoom-style View Switcher & Top-Bar State
+  const [viewMode, setViewMode] = useState<'gallery' | 'speaker' | 'multi-speaker'>('gallery');
+  const [showViewMenu, setShowViewMenu] = useState(false);
+  const [showMeetingInfo, setShowMeetingInfo] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
+  const meetingInfoRef = useRef<HTMLDivElement>(null);
+
+  // Click-outside listeners for top-bar dropdowns
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
+        setShowViewMenu(false);
+      }
+      if (meetingInfoRef.current && !meetingInfoRef.current.contains(e.target as Node)) {
+        setShowMeetingInfo(false);
+      }
+    }
+    if (showViewMenu || showMeetingInfo) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showViewMenu, showMeetingInfo]);
+
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+    setShowViewMenu(false);
+  };
 
   const rtcManagerRef = useRef<WebRTCManager | null>(null);
   const liveKitManagerRef = useRef<LiveKitRoomManager | null>(null);
@@ -961,40 +1010,35 @@ export function MeetingRoom({
 
   return (
     <div className="fixed inset-0 bg-slate-950 flex flex-col overflow-hidden select-none">
-      {/* Top Header Bar */}
-      <div className="h-14 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-4 flex items-center justify-between z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 font-black text-sm flex items-center justify-center shadow-md">
+      {/* Zoom-Style Top Header Bar */}
+      <div className="h-14 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-2 sm:px-4 flex items-center justify-between z-30 select-none">
+        {/* Left: Branding & Room Info */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 font-black text-sm flex items-center justify-center shadow-md shadow-amber-500/10">
             स
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-sm">Sabha</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-mono">
-                {roomId}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="font-bold text-white text-sm hidden xs:inline">Sabha</span>
+            <span className="text-xs px-2 py-0.5 rounded-lg bg-slate-800/90 text-amber-400 font-mono border border-slate-700/50">
+              {roomId}
+            </span>
+            {isLiveKitSFU && (
+              <span className="hidden md:flex text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/30 items-center gap-1">
+                <Zap className="w-3 h-3" /> SFU 100+
               </span>
-              {isLiveKitSFU && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> 100+ Capacity
-                </span>
-              )}
-              {roomSettings.isLocked && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30">
-                  Locked
-                </span>
-              )}
-            </div>
+            )}
+            {roomSettings.isLocked && (
+              <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Locked
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Center: Meeting Duration & Recording Indicator */}
+        {/* Center: Recording Indicator */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>{formatDuration(duration)}</span>
-          </div>
           {isRecording && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-xs font-semibold text-rose-400 animate-pulse shadow-sm">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-xs font-semibold text-rose-400 animate-pulse shadow-sm">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
               <span className="font-mono">{formatDuration(recordingSeconds)}</span>
               <span className="hidden sm:inline text-[10px] text-rose-300 font-bold">REC</span>
@@ -1002,24 +1046,184 @@ export function MeetingRoom({
           )}
         </div>
 
-        {/* Right: Invite & Copy Clean Link */}
-        <div className="flex items-center gap-2">
+        {/* Right: Zoom Header Suite (Shield + Timer + View Switcher + Invite) */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Zoom Green Shield: Verified Encryption & Security Status */}
+          <div className="relative" ref={meetingInfoRef}>
+            <button
+              onClick={() => setShowMeetingInfo(!showMeetingInfo)}
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 transition cursor-pointer"
+              title="Meeting Info & Security Details"
+            >
+              <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400">
+                <Check className="w-3 h-3 stroke-[3]" />
+              </div>
+              <span className="font-mono text-xs text-slate-300 font-medium hidden sm:inline">
+                {formatDuration(duration)}
+              </span>
+              <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:inline" />
+            </button>
+
+            {/* Meeting Info Popover */}
+            {showMeetingInfo && (
+              <div className="absolute top-full right-0 mt-2 w-72 sm:w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-4 z-50 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Sabha Meeting Info</h4>
+                    <p className="text-[10px] text-emerald-400 font-medium">End-to-end verified session</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Meeting ID</span>
+                    <span className="font-mono text-slate-200 font-semibold">{roomId}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Host (सभापति)</span>
+                    <span className="text-slate-200 truncate max-w-[140px]">{roomSettings.hostName || 'Host'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Duration</span>
+                    <span className="font-mono text-slate-200">{formatDuration(duration)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Network Engine</span>
+                    <span className="text-amber-400 font-semibold">{isLiveKitSFU ? 'LiveKit SFU Mesh' : 'WebRTC Peer Mesh'}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+                  <button
+                    onClick={copyInviteLink}
+                    className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition border border-slate-700/60 cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMeetingInfo(false);
+                      setIsShareModalOpen(true);
+                    }}
+                    className="py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Invite</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+
+          {/* Zoom View Dropdown: Speaker vs Gallery vs Multi-speaker (matching Image 3) */}
+          <div className="relative" ref={viewMenuRef}>
+            <button
+              onClick={() => setShowViewMenu(!showViewMenu)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/60 transition cursor-pointer text-xs font-semibold"
+              title="Change Meeting Layout (Speaker / Gallery)"
+            >
+              {viewMode === 'speaker' ? (
+                <LayoutTemplate className="w-3.5 h-3.5 text-amber-400" />
+              ) : viewMode === 'multi-speaker' ? (
+                <Grid2X2 className="w-3.5 h-3.5 text-amber-400" />
+              ) : (
+                <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
+              )}
+              <span className="hidden xs:inline">View</span>
+            </button>
+
+            {/* Dropdown Menu matching Image 3 */}
+            {showViewMenu && (
+              <div className="absolute top-full right-0 mt-2 w-48 sm:w-56 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl py-1.5 z-50 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Speaker View */}
+                <button
+                  onClick={() => {
+                    setViewMode('speaker');
+                    setShowViewMenu(false);
+                  }}
+                  className={`w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer ${
+                    viewMode === 'speaker' ? 'text-amber-400 font-semibold' : 'text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 flex items-center justify-center">
+                      {viewMode === 'speaker' && <Check className="w-3.5 h-3.5" />}
+                    </span>
+                    <span>Speaker</span>
+                  </div>
+                  <LayoutTemplate className="w-4 h-4 text-slate-400" />
+                </button>
+
+                {/* Gallery View */}
+                <button
+                  onClick={() => {
+                    setViewMode('gallery');
+                    setShowViewMenu(false);
+                  }}
+                  className={`w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer ${
+                    viewMode === 'gallery' ? 'text-amber-400 font-semibold' : 'text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 flex items-center justify-center">
+                      {viewMode === 'gallery' && <Check className="w-3.5 h-3.5" />}
+                    </span>
+                    <span>Gallery</span>
+                  </div>
+                  <LayoutGrid className="w-4 h-4 text-slate-400" />
+                </button>
+
+                {/* Multi-speaker View */}
+                <button
+                  onClick={() => {
+                    setViewMode('multi-speaker');
+                    setShowViewMenu(false);
+                  }}
+                  className={`w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer ${
+                    viewMode === 'multi-speaker' ? 'text-amber-400 font-semibold' : 'text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 flex items-center justify-center">
+                      {viewMode === 'multi-speaker' && <Check className="w-3.5 h-3.5" />}
+                    </span>
+                    <span>Multi-speaker</span>
+                  </div>
+                  <Grid2X2 className="w-4 h-4 text-slate-400" />
+                </button>
+
+                <div className="my-1 border-t border-slate-800" />
+
+                {/* Fullscreen Toggle */}
+                <button
+                  onClick={handleToggleFullscreen}
+                  className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer text-slate-300 hover:text-white"
+                >
+                  <div className="flex items-center gap-2 pl-6">
+                    <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+                  </div>
+                  {isFullscreen ? <Minimize className="w-4 h-4 text-slate-400" /> : <Maximize className="w-4 h-4 text-slate-400" />}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+
+          {/* Invite Button */}
           <button
             onClick={() => setIsShareModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
-            title="Invite participants with clean link, WhatsApp, or apps"
+            title="Invite participants"
           >
             <Share2 className="w-3.5 h-3.5" />
-            <span>Invite</span>
-          </button>
-
-          <button
-            onClick={copyInviteLink}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition shadow-sm active:scale-95 cursor-pointer"
-            title="Copy clean participant join link"
-          >
-            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span className="hidden md:inline">{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
+            <span className="hidden sm:inline">Invite</span>
           </button>
         </div>
       </div>
@@ -1051,6 +1255,7 @@ export function MeetingRoom({
           isHostViewer={localParticipant.isHost}
           onMuteParticipant={handleMuteParticipant}
           onKickParticipant={handleKickParticipant}
+          viewMode={viewMode}
         />
 
         {/* Side Panel: In-Meeting Chat */}

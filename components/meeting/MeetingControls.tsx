@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Mic,
   MicOff,
@@ -69,6 +69,19 @@ export function MeetingControls({
   onLeaveMeeting,
 }: MeetingControlsProps) {
   const [showReactionsMenu, setShowReactionsMenu] = useState(false);
+  const reactionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (reactionsRef.current && !reactionsRef.current.contains(e.target as Node)) {
+        setShowReactionsMenu(false);
+      }
+    }
+    if (showReactionsMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showReactionsMenu]);
 
   const emojis = ['👍', '❤️', '👏', '😂', '🎉', '🚀'];
 
@@ -211,10 +224,12 @@ export function MeetingControls({
         </button>
 
         {/* Reactions & Hand Raise Popover */}
-        <div className="relative">
+        <div className="relative" ref={reactionsRef}>
           <button
             onClick={() => setShowReactionsMenu(!showReactionsMenu)}
-            className="flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"
+            className={`flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition cursor-pointer ${
+              showReactionsMenu ? 'bg-slate-800 text-amber-400' : 'text-slate-200 hover:bg-slate-800/80'
+            }`}
             title="Reactions & Hand Raise"
           >
             <Smile className="w-4 h-4 sm:w-5 sm:h-5 sm:mb-1 text-amber-400" />
@@ -222,8 +237,8 @@ export function MeetingControls({
           </button>
 
           {showReactionsMenu && (
-            <div className="absolute bottom-16 right-0 sm:left-1/2 sm:-translate-x-1/2 mb-2 p-3 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 flex flex-col gap-2">
-              <div className="flex items-center gap-1.5">
+            <div className="absolute bottom-full mb-3 right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 w-72 sm:w-80 min-w-[280px] p-3 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 z-50 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150 select-none">
+              <div className="flex items-center justify-between gap-1 px-1">
                 {emojis.map((emoji) => (
                   <button
                     key={emoji}
@@ -231,7 +246,7 @@ export function MeetingControls({
                       onSendReaction(emoji);
                       setShowReactionsMenu(false);
                     }}
-                    className="text-2xl p-2 rounded-xl hover:bg-slate-800 hover:scale-125 transition-transform active:scale-95"
+                    className="text-2xl p-1.5 rounded-xl hover:bg-slate-800 hover:scale-125 transition-transform active:scale-90 cursor-pointer flex-shrink-0"
                   >
                     {emoji}
                   </button>
@@ -242,15 +257,17 @@ export function MeetingControls({
                   onToggleHandRaise();
                   setShowReactionsMenu(false);
                 }}
-                className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition ${
+                className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition shadow-sm cursor-pointer whitespace-nowrap ${
                   isHandRaised
-                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400'
                     : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
                 }`}
               >
-                <Hand className="w-4 h-4" />
+                <Hand className="w-4 h-4 flex-shrink-0" />
                 <span>{isHandRaised ? 'Lower Hand' : 'Raise Hand ✋'}</span>
               </button>
+              {/* Downward pointer arrow */}
+              <div className="absolute -bottom-1.5 right-5 sm:left-1/2 sm:-translate-x-1/2 w-3 h-3 bg-slate-900 border-b border-r border-slate-700 rotate-45 pointer-events-none" />
             </div>
           )}
         </div>
