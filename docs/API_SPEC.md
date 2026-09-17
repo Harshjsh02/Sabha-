@@ -61,12 +61,26 @@ Logs participant login telemetry, public IP address, user agent, and timestamp t
 ```
 
 #### Responses
+### 1.3 Participant Departure & Room Leave Endpoint
+Instantaneous participant teardown endpoint invoked during app close, browser termination, navigation, or participant kick actions via `navigator.sendBeacon` and fetch. Purges participant documents from Firestore and immediately terminates the LiveKit session.
+
+- **Route:** `POST /api/room/leave`
+- **Location:** [`app/api/room/leave/route.ts`](file:///app/api/room/leave/route.ts)
+- **Transport:** Standard JSON fetch or `navigator.sendBeacon(Blob)`
+
+#### Request Body
+```json
+{
+  "roomId": "sabha-140-802",
+  "participantId": "peer_abc123"
+}
+```
+
+#### Responses
 **200 OK**
 ```json
 {
-  "success": true,
-  "ip": "203.0.113.195",
-  "timestamp": 1726615200000
+  "success": true
 }
 ```
 

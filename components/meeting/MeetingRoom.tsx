@@ -286,18 +286,32 @@ export function MeetingRoom({
       setDuration((d) => d + 1);
     }, 1000);
 
-    return () => {
-      active = false;
-      clearInterval(timer);
-      unsubSettings();
-      unsubChat();
-      unsubReactions();
+    // 6. Fast cleanup on app close, tab close, or navigation (beforeunload + pagehide)
+    const handleCleanExit = () => {
       if (liveKitManagerRef.current) {
         liveKitManagerRef.current.disconnect();
       }
       if (rtcManagerRef.current) {
         rtcManagerRef.current.leaveRoom();
       }
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        const payload = JSON.stringify({ roomId, participantId: initialParticipant.id });
+        navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
+      }
+    };
+
+    window.addEventListener('beforeunload', handleCleanExit);
+    window.addEventListener('pagehide', handleCleanExit);
+
+    return () => {
+      active = false;
+      window.removeEventListener('beforeunload', handleCleanExit);
+      window.removeEventListener('pagehide', handleCleanExit);
+      handleCleanExit();
+      clearInterval(timer);
+      unsubSettings();
+      unsubChat();
+      unsubReactions();
     };
   }, [roomId, initialParticipant.id]);
 
@@ -563,6 +577,10 @@ export function MeetingRoom({
 
   const handleKickParticipant = (peerId: string) => {
     rtcManagerRef.current?.sendKickCommand(peerId);
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      const payload = JSON.stringify({ roomId, participantId: peerId });
+      navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
+    }
   };
 
   const handleToggleLock = () => {
@@ -576,6 +594,14 @@ export function MeetingRoom({
   const handleEndMeetingForAll = async () => {
     for (const p of remoteParticipants) {
       await rtcManagerRef.current?.sendKickCommand(p.id);
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        const payload = JSON.stringify({ roomId, participantId: p.id });
+        navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
+      }
+    }
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      const payload = JSON.stringify({ roomId, participantId: localParticipant.id });
+      navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
     }
     if (liveKitManagerRef.current) {
       await liveKitManagerRef.current.disconnect();
@@ -586,6 +612,10 @@ export function MeetingRoom({
 
   const handleLeaveMeeting = async () => {
     if (confirm('Are you sure you want to leave the Sabha?')) {
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        const payload = JSON.stringify({ roomId, participantId: localParticipant.id });
+        navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
+      }
       if (liveKitManagerRef.current) {
         await liveKitManagerRef.current.disconnect();
       }

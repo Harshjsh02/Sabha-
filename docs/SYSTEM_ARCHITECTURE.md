@@ -55,7 +55,8 @@ Sabha is architected around a **Dual-Tier Real-Time Topology** designed for maxi
 |     API Secret & Grants)    |       |    - /rooms/{roomId}/signals                |
 |  - POST /api/auth/record-   |       |    - /rooms/{roomId}/messages (Chat)        |
 |    login (IP & User-Agent)  |       |    - /rooms/{roomId}/reactions (Reactions)   |
-|                             |       |    - /users/{uid}/loginHistory (Audit Log)  |
+|  - POST /api/room/leave     |       |    - /users/{uid}/loginHistory (Audit Log)  |
+|    (Beacon teardown cleanup)|       |                                             |
 +-----------------------------+       +---------------------------------------------+
 ```
 
@@ -126,6 +127,13 @@ Active speaker detection runs completely client-side to minimize processing over
 - **FFT Analysis:** Uses an `AnalyserNode` with `fftSize = 256` and `smoothingTimeConstant = 0.8`.
 - **RMS Energy Calculation:** Evaluates root-mean-square amplitude every 50ms.
 - **Threshold Gating:** If RMS exceeds the speaking threshold (~25–35 dB sensitivity level) consistently for >100ms, the peer is marked as active speaker, dispatching an event to apply the emerald glow ring.
+
+### 2.5 Instantaneous Participant Disconnect & Presence Lifecycle
+Sabha enforces zero-delay departure detection across desktop, mobile app swipe-close, and background termination:
+1. **Unload & Pagehide Listeners:** [`MeetingRoom.tsx`](file:///components/meeting/MeetingRoom.tsx) attaches both `beforeunload` and mobile-standard `pagehide` listeners.
+2. **Asynchronous OS Beacon (`navigator.sendBeacon`):** On unload, the browser fires an asynchronous beacon to [`POST /api/room/leave`](file:///app/api/room/leave/route.ts). The server immediately deletes the participant document from `/rooms/{roomId}/participants/{peerId}` and calls `RoomServiceClient.removeParticipant` in LiveKit Cloud, removing ghost tiles in <100ms.
+3. **WebRTC PeerConnection Guard:** [`WebRTCManager`](file:///lib/webrtc.ts) monitors `pc.onconnectionstatechange`. If connection drops to `'disconnected'` for >2.5s or reaches `'failed'/'closed'`, `removeDeadPeer` immediately closes the connection, unmounts the remote tile, and purges the Firestore participant doc.
+4. **Presence Heartbeat & Automatic Pruning:** Active participants write `lastSeen: Date.now()` every 5 seconds. The Firestore listener prunes any peer record whose heartbeat is older than 15 seconds, handling sudden device battery loss or process crashes.
 
 ---
 

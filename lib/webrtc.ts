@@ -35,6 +35,8 @@ export class WebRTCManager {
   private remoteStreams: Map<string, MediaStream> = new Map();
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private isPolite: Map<string, boolean> = new Map();
+  private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   // Callbacks
   public onRemoteStreamAdded: (peerId: string, stream: MediaStream) => void = () => {};
@@ -86,14 +88,29 @@ export class WebRTCManager {
       await setDoc(participantRef, {
         ...this.localParticipant,
         joinedAt: Date.now(),
+        lastSeen: Date.now(),
       });
 
-      // 2. Listen to participants list
+      // Periodic heartbeat to keep presence alive
+      this.heartbeatTimer = setInterval(async () => {
+        try {
+          await updateDoc(participantRef, { lastSeen: Date.now() });
+        } catch {}
+      }, 5000);
+
+      // 2. Listen to participants list and prune stale participants
       const participantsCol = collection(db, `rooms/${this.roomId}/participants`);
       this.unsubParticipants = onSnapshot(participantsCol, (snapshot) => {
+        const now = Date.now();
         const list: Participant[] = [];
         snapshot.forEach((d) => {
-          list.push(d.data() as Participant);
+          const p = d.data() as Participant & { lastSeen?: number };
+          // If a peer's heartbeat is older than 15s (e.g. killed app/browser without clean unload), prune them
+          if (p.id !== this.localParticipant.id && p.lastSeen && now - p.lastSeen > 15000) {
+            deleteDoc(d.ref).catch(() => {});
+            return;
+          }
+          list.push(p);
         });
         this.onParticipantsChanged(list);
         this.reconcilePeers(list);
@@ -201,8 +218,38 @@ export class WebRTCManager {
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      const state = pc.connectionState;
+      if (state === 'disconnected') {
         this.onRemoteStreamRemoved(peerId);
+        // If disconnected for > 2.5s (e.g. mobile app swiped away/closed), clean up peer immediately
+        if (!this.disconnectTimers.has(peerId)) {
+          const timer = setTimeout(() => {
+            const currentPc = this.peerConnections.get(peerId);
+            if (
+              currentPc &&
+              (currentPc.connectionState === 'disconnected' ||
+                currentPc.connectionState === 'failed' ||
+                currentPc.connectionState === 'closed')
+            ) {
+              this.removeDeadPeer(peerId);
+            }
+            this.disconnectTimers.delete(peerId);
+          }, 2500);
+          this.disconnectTimers.set(peerId, timer);
+        }
+      } else if (state === 'connected') {
+        const timer = this.disconnectTimers.get(peerId);
+        if (timer) {
+          clearTimeout(timer);
+          this.disconnectTimers.delete(peerId);
+        }
+      } else if (state === 'failed' || state === 'closed') {
+        const timer = this.disconnectTimers.get(peerId);
+        if (timer) {
+          clearTimeout(timer);
+          this.disconnectTimers.delete(peerId);
+        }
+        this.removeDeadPeer(peerId);
       }
     };
 
@@ -363,7 +410,32 @@ export class WebRTCManager {
     }
   }
 
+  private removeDeadPeer(peerId: string) {
+    const pc = this.peerConnections.get(peerId);
+    if (pc) {
+      pc.close();
+      this.peerConnections.delete(peerId);
+    }
+    this.remoteStreams.delete(peerId);
+    this.pendingCandidates.delete(peerId);
+    this.onRemoteStreamRemoved(peerId);
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        const deadRef = doc(db, `rooms/${this.roomId}/participants/${peerId}`);
+        deleteDoc(deadRef).catch(() => {});
+      } catch {}
+    }
+  }
+
   public async leaveRoom(): Promise<void> {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.disconnectTimers.forEach((timer) => clearTimeout(timer));
+    this.disconnectTimers.clear();
+
     if (this.unsubParticipants) {
       this.unsubParticipants();
       this.unsubParticipants = null;

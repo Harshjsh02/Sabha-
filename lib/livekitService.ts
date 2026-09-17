@@ -159,7 +159,9 @@ export class LiveKitRoomManager {
     this.room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
       const peerId = participant.identity;
       this.remoteMediaStreams.delete(peerId);
+      this.remoteScreenStreams.delete(peerId);
       this.onRemoteStreamRemoved(peerId);
+      this.onRemoteScreenStreamRemoved(peerId);
       this.syncParticipants();
     });
 
@@ -307,7 +309,10 @@ export class LiveKitRoomManager {
   }
 
   public async disconnect(): Promise<void> {
-    await this.room.disconnect();
+    try {
+      await this.room.disconnect(true);
+    } catch {}
     this.remoteMediaStreams.clear();
+    this.remoteScreenStreams.clear();
   }
 }
