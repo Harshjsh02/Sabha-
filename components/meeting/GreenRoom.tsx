@@ -123,12 +123,13 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
       audioContextRef.current.close();
     }
 
-    // Stop preview stream tracks to release hardware locks for mobile/desktop
+    // Prepare stream tracks with user choices for instant entry into meeting
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getAudioTracks().forEach((t) => (t.enabled = audioEnabled));
+      stream.getVideoTracks().forEach((t) => (t.enabled = videoEnabled));
     }
 
-    onJoin(user.displayName, audioEnabled, videoEnabled, null);
+    onJoin(user.displayName, audioEnabled, videoEnabled, stream);
   };
 
   return (

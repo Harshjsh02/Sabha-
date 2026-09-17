@@ -29,6 +29,7 @@ export class LiveKitRoomManager {
 
   private remoteMediaStreams: Map<string, MediaStream> = new Map();
   private remoteScreenStreams: Map<string, MediaStream> = new Map();
+  private localMediaStream: MediaStream = new MediaStream();
 
   constructor(wsUrl: string, token: string, localParticipantInfo: Participant) {
     this.wsUrl = (wsUrl || '').trim();
@@ -38,9 +39,6 @@ export class LiveKitRoomManager {
     this.room = new Room({
       adaptiveStream: false,
       dynacast: false,
-      videoCaptureDefaults: {
-        resolution: { width: 1280, height: 720 },
-      },
     });
 
     this.setupListeners();
@@ -196,14 +194,58 @@ export class LiveKitRoomManager {
 
   public async publishLocalTracks(
     audioEnabled: boolean,
-    videoEnabled: boolean
+    videoEnabled: boolean,
+    existingStream?: MediaStream | null
   ): Promise<MediaStream> {
     try {
+      // 1. If an existing stream was passed from GreenRoom, publish its tracks directly
+      if (existingStream && existingStream.getTracks().length > 0) {
+        const videoTrack = existingStream.getVideoTracks()[0];
+        const audioTrack = existingStream.getAudioTracks()[0];
+
+        if (videoTrack) {
+          videoTrack.enabled = videoEnabled;
+          const pub = await this.room.localParticipant.publishTrack(videoTrack, {
+            name: 'camera',
+            source: Track.Source.Camera,
+          });
+          if (!videoEnabled) {
+            await pub.mute();
+          }
+          if (!this.localMediaStream.getTracks().some((t) => t.id === videoTrack.id)) {
+            this.localMediaStream.addTrack(videoTrack);
+          }
+        }
+
+        if (audioTrack) {
+          audioTrack.enabled = audioEnabled;
+          const pub = await this.room.localParticipant.publishTrack(audioTrack, {
+            name: 'microphone',
+            source: Track.Source.Microphone,
+          });
+          if (!audioEnabled) {
+            await pub.mute();
+          }
+          if (!this.localMediaStream.getTracks().some((t) => t.id === audioTrack.id)) {
+            this.localMediaStream.addTrack(audioTrack);
+          }
+        }
+
+        return new MediaStream(this.localMediaStream.getTracks());
+      }
+
+      // 2. Otherwise request tracks via LiveKit defaults
       if (videoEnabled) {
-        await this.room.localParticipant.setCameraEnabled(true);
+        const camPub = await this.room.localParticipant.setCameraEnabled(true);
+        if (camPub?.track?.mediaStreamTrack) {
+          this.localMediaStream.addTrack(camPub.track.mediaStreamTrack);
+        }
       }
       if (audioEnabled) {
-        await this.room.localParticipant.setMicrophoneEnabled(true);
+        const micPub = await this.room.localParticipant.setMicrophoneEnabled(true);
+        if (micPub?.track?.mediaStreamTrack) {
+          this.localMediaStream.addTrack(micPub.track.mediaStreamTrack);
+        }
       }
     } catch (err) {
       console.warn('Initial track publication warning:', err);
@@ -216,15 +258,44 @@ export class LiveKitRoomManager {
     const localStream = new MediaStream();
     this.room.localParticipant.trackPublications.forEach((pub) => {
       if (pub.track?.mediaStreamTrack && pub.source !== Track.Source.ScreenShare) {
-        localStream.addTrack(pub.track.mediaStreamTrack);
+        if (!localStream.getTracks().some((t) => t.id === pub.track!.mediaStreamTrack.id)) {
+          localStream.addTrack(pub.track.mediaStreamTrack);
+        }
       }
     });
+
+    this.localMediaStream.getTracks().forEach((t) => {
+      if (t.readyState === 'live' && !localStream.getTracks().some((existing) => existing.id === t.id)) {
+        localStream.addTrack(t);
+      }
+    });
+
     return localStream;
   }
 
   public async setAudioEnabled(enabled: boolean): Promise<MediaStream> {
     try {
-      await this.room.localParticipant.setMicrophoneEnabled(enabled);
+      const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub && micPub.track) {
+        // Fast path: instant 0ms mute/unmute without re-initializing hardware
+        if (enabled) {
+          await micPub.unmute();
+        } else {
+          await micPub.mute();
+        }
+        if (micPub.track.mediaStreamTrack) {
+          micPub.track.mediaStreamTrack.enabled = enabled;
+        }
+      } else {
+        // Slow path: track not yet published
+        const pub = await this.room.localParticipant.setMicrophoneEnabled(enabled);
+        if (pub?.track?.mediaStreamTrack) {
+          pub.track.mediaStreamTrack.enabled = enabled;
+          if (!this.localMediaStream.getTracks().some((t) => t.id === pub.track!.mediaStreamTrack.id)) {
+            this.localMediaStream.addTrack(pub.track.mediaStreamTrack);
+          }
+        }
+      }
     } catch (err) {
       console.warn('Microphone toggle warning:', err);
     }
@@ -238,7 +309,27 @@ export class LiveKitRoomManager {
 
   public async setVideoEnabled(enabled: boolean): Promise<MediaStream> {
     try {
-      await this.room.localParticipant.setCameraEnabled(enabled);
+      const camPub = this.room.localParticipant.getTrackPublication(Track.Source.Camera);
+      if (camPub && camPub.track) {
+        // Fast path: instant 0ms mute/unmute without re-initializing camera sensor
+        if (enabled) {
+          await camPub.unmute();
+        } else {
+          await camPub.mute();
+        }
+        if (camPub.track.mediaStreamTrack) {
+          camPub.track.mediaStreamTrack.enabled = enabled;
+        }
+      } else {
+        // Slow path: track not yet published
+        const pub = await this.room.localParticipant.setCameraEnabled(enabled);
+        if (pub?.track?.mediaStreamTrack) {
+          pub.track.mediaStreamTrack.enabled = enabled;
+          if (!this.localMediaStream.getTracks().some((t) => t.id === pub.track!.mediaStreamTrack.id)) {
+            this.localMediaStream.addTrack(pub.track.mediaStreamTrack);
+          }
+        }
+      }
     } catch (err) {
       console.warn('Camera toggle warning:', err);
     }

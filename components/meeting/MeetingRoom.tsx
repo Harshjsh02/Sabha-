@@ -189,7 +189,8 @@ export function MeetingRoom({
             await lkManager.connect();
             const lkLocalStream = await lkManager.publishLocalTracks(
               initialParticipant.audioEnabled,
-              initialParticipant.videoEnabled
+              initialParticipant.videoEnabled,
+              initialStream
             );
 
             if (lkLocalStream && lkLocalStream.getTracks().length > 0) {
@@ -336,6 +337,16 @@ export function MeetingRoom({
 
     const nextState = !localParticipant.audioEnabled;
 
+    // 1. Optimistic UI update (0ms instant feedback)
+    setLocalParticipant((p) => ({ ...p, audioEnabled: nextState }));
+    if (localStream) {
+      localStream.getAudioTracks().forEach((t) => (t.enabled = nextState));
+      setLocalStream(new MediaStream(localStream.getTracks()));
+    }
+
+    isTogglingAudioRef.current = true;
+    setIsTogglingAudio(true);
+
     try {
       if (liveKitManagerRef.current) {
         const updatedStream = await liveKitManagerRef.current.setAudioEnabled(nextState);
@@ -343,16 +354,11 @@ export function MeetingRoom({
           setLocalStream(new MediaStream(updatedStream.getTracks()));
         }
       }
-
-      if (localStream) {
-        localStream.getAudioTracks().forEach((t) => (t.enabled = nextState));
-        setLocalStream(new MediaStream(localStream.getTracks()));
-      }
-
-      setLocalParticipant((p) => ({ ...p, audioEnabled: nextState }));
       rtcManagerRef.current?.updateParticipantState({ audioEnabled: nextState });
     } catch (err) {
       console.warn('Microphone toggle warning:', err);
+      // Revert if failed
+      setLocalParticipant((p) => ({ ...p, audioEnabled: !nextState }));
     } finally {
       isTogglingAudioRef.current = false;
       setIsTogglingAudio(false);
@@ -364,14 +370,17 @@ export function MeetingRoom({
     if (roomSettings.requireVideo && !localParticipant.isHost && !localParticipant.videoEnabled) {
       const enableVideoAutomatically = async () => {
         try {
-          if (liveKitManagerRef.current) {
-            const updatedStream = await liveKitManagerRef.current.setVideoEnabled(true);
-            setLocalStream(new MediaStream(updatedStream.getTracks()));
-          } else if (localStream) {
+          setLocalParticipant((p) => ({ ...p, videoEnabled: true }));
+          if (localStream) {
             localStream.getVideoTracks().forEach((t) => (t.enabled = true));
             setLocalStream(new MediaStream(localStream.getTracks()));
           }
-          setLocalParticipant((p) => ({ ...p, videoEnabled: true }));
+          if (liveKitManagerRef.current) {
+            const updatedStream = await liveKitManagerRef.current.setVideoEnabled(true);
+            if (updatedStream && updatedStream.getTracks().length > 0) {
+              setLocalStream(new MediaStream(updatedStream.getTracks()));
+            }
+          }
           rtcManagerRef.current?.updateParticipantState({ videoEnabled: true });
         } catch (err) {
           console.warn('Auto enable video failed:', err);
@@ -390,24 +399,30 @@ export function MeetingRoom({
       return;
     }
 
+    const nextState = !localParticipant.videoEnabled;
+
+    // 1. Optimistic UI update (0ms instant feedback)
+    setLocalParticipant((p) => ({ ...p, videoEnabled: nextState }));
+    if (localStream) {
+      localStream.getVideoTracks().forEach((t) => (t.enabled = nextState));
+      setLocalStream(new MediaStream(localStream.getTracks()));
+    }
+
     isTogglingVideoRef.current = true;
     setIsTogglingVideo(true);
-
-    const nextState = !localParticipant.videoEnabled;
 
     try {
       if (liveKitManagerRef.current) {
         const updatedStream = await liveKitManagerRef.current.setVideoEnabled(nextState);
-        setLocalStream(new MediaStream(updatedStream.getTracks()));
-      } else if (localStream) {
-        localStream.getVideoTracks().forEach((t) => (t.enabled = nextState));
-        setLocalStream(new MediaStream(localStream.getTracks()));
+        if (updatedStream && updatedStream.getTracks().length > 0) {
+          setLocalStream(new MediaStream(updatedStream.getTracks()));
+        }
       }
-
-      setLocalParticipant((p) => ({ ...p, videoEnabled: nextState }));
       rtcManagerRef.current?.updateParticipantState({ videoEnabled: nextState });
     } catch (err) {
       console.warn('Camera toggle warning:', err);
+      // Revert if failed
+      setLocalParticipant((p) => ({ ...p, videoEnabled: !nextState }));
     } finally {
       isTogglingVideoRef.current = false;
       setIsTogglingVideo(false);
