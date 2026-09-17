@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
+import { createRoom } from '@/lib/roomService';
 import {
   Video,
   Plus,
@@ -46,7 +47,10 @@ export default function HomePage() {
       }
     }
     const newRoomId = generateMeetingCode();
-    router.push(`/room/${newRoomId}?host=true`);
+    if (user) {
+      await createRoom(newRoomId, user.uid, user.displayName);
+    }
+    router.push(`/room/${newRoomId}`);
   };
 
   const handleJoinMeeting = async (e: React.FormEvent) => {

@@ -14,14 +14,16 @@ import {
   sendReaction,
   subscribeToReactions,
 } from '@/lib/roomService';
+import { useAuth } from '@/lib/authContext';
 import { VideoGrid } from './VideoGrid';
 import { MeetingControls } from './MeetingControls';
 import { ChatPanel } from './ChatPanel';
 import { ParticipantsPanel } from './ParticipantsPanel';
 import { WhiteboardModal, WhiteboardDrawEvent } from './WhiteboardModal';
 import { HostControlModal } from './HostControlModal';
+import { ShareMeetingModal } from './ShareMeetingModal';
 import { ReactionsOverlay } from './ReactionsOverlay';
-import { Copy, Check, Clock, Zap } from 'lucide-react';
+import { Copy, Check, Clock, Zap, Share2 } from 'lucide-react';
 
 interface MeetingRoomProps {
   roomId: string;
@@ -60,11 +62,14 @@ export function MeetingRoom({
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [latestReaction, setLatestReaction] = useState<ReactionItem | null>(null);
 
+  const { user } = useAuth();
+
   // Panels & Modals
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [incomingDrawEvent, setIncomingDrawEvent] = useState<WhiteboardDrawEvent | null>(null);
 
   // Recording State
@@ -85,19 +90,26 @@ export function MeetingRoom({
     let active = true;
 
     async function init() {
-      // 1. Fetch or initialize room data
+      // 1. Fetch or initialize room data from Firestore
       const roomData = await getOrCreateRoom(
         roomId,
-        initialParticipant.isHost ? initialParticipant.id : '',
-        initialParticipant.isHost ? initialParticipant.name : ''
+        user?.uid || '',
+        user?.displayName || ''
       );
 
       if (active) {
         setRoomSettings(roomData);
       }
 
-      // Check if room is locked and user is not host
-      if (roomData.isLocked && !initialParticipant.isHost) {
+      // True Database Verification: user is host ONLY if their UID matches Firestore hostId
+      const isVerifiedHost = Boolean(user?.uid && roomData.hostId && user.uid === roomData.hostId);
+
+      if (active) {
+        setLocalParticipant((prev) => ({ ...prev, isHost: isVerifiedHost }));
+      }
+
+      // Check if room is locked and user is not verified host
+      if (roomData.isLocked && !isVerifiedHost) {
         alert('This Sabha meeting has been locked by the host.');
         router.push('/');
         return;
@@ -108,7 +120,7 @@ export function MeetingRoom({
       try {
         const username = initialParticipant.name || initialParticipant.id;
         const res = await fetch(
-          `/api/livekit-token?room=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&isHost=${initialParticipant.isHost}`
+          `/api/livekit-token?room=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&isHost=${isVerifiedHost}`
         );
 
         if (res.ok) {
@@ -498,8 +510,8 @@ export function MeetingRoom({
   };
 
   const copyInviteLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url);
+    const cleanUrl = `${window.location.origin}/room/${roomId}`;
+    navigator.clipboard.writeText(cleanUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -544,11 +556,21 @@ export function MeetingRoom({
           <span>{formatDuration(duration)}</span>
         </div>
 
-        {/* Right: Copy Link */}
+        {/* Right: Invite & Copy Clean Link */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
+            title="Invite participants with clean link, WhatsApp, or apps"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Invite</span>
+          </button>
+
+          <button
             onClick={copyInviteLink}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition shadow-sm"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition shadow-sm active:scale-95 cursor-pointer"
+            title="Copy clean participant join link"
           >
             {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span className="hidden md:inline">{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
@@ -592,6 +614,7 @@ export function MeetingRoom({
           onMuteParticipant={handleMuteParticipant}
           onKickParticipant={handleKickParticipant}
           onToggleLock={handleToggleLock}
+          onOpenInvite={() => setIsShareModalOpen(true)}
         />
       </div>
 
@@ -639,6 +662,14 @@ export function MeetingRoom({
         roomSettings={roomSettings}
         onUpdateSettings={handleUpdateSettings}
         onEndMeetingForAll={handleEndMeetingForAll}
+      />
+
+      {/* Share / Invite Modal */}
+      <ShareMeetingModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        roomId={roomId}
+        hostName={roomSettings.hostName}
       />
 
       {/* Floating Emoji Reactions Layer */}

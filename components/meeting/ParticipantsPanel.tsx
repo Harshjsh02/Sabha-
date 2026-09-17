@@ -15,6 +15,7 @@ import {
   UserX,
   Lock,
   Unlock,
+  UserPlus,
 } from 'lucide-react';
 
 interface ParticipantsPanelProps {
@@ -28,6 +29,7 @@ interface ParticipantsPanelProps {
   onMuteParticipant: (id: string) => void;
   onKickParticipant: (id: string) => void;
   onToggleLock: () => void;
+  onOpenInvite?: () => void;
 }
 
 export function ParticipantsPanel({
@@ -41,6 +43,7 @@ export function ParticipantsPanel({
   onMuteParticipant,
   onKickParticipant,
   onToggleLock,
+  onOpenInvite,
 }: ParticipantsPanelProps) {
   if (!isOpen) return null;
 
@@ -61,6 +64,19 @@ export function ParticipantsPanel({
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Invite More People to Meeting */}
+      {onOpenInvite && (
+        <div className="p-3 border-b border-slate-800/80 bg-slate-950/30">
+          <button
+            onClick={onOpenInvite}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold border border-amber-500/30 transition shadow-sm active:scale-98 cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Invite More People to Sabha</span>
+          </button>
+        </div>
+      )}
 
       {/* Host Quick Admin Bar */}
       {isHost && (

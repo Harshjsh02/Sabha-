@@ -80,6 +80,21 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
     };
   }, []);
 
+  // Ensure camera preview stream is attached and playing
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    if (stream && videoEnabled) {
+      if (videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+      }
+      videoEl.play().catch((err) => {
+        console.warn('GreenRoom video playback warning:', err);
+      });
+    }
+  }, [stream, videoEnabled]);
+
   // Handle toggles
   const handleToggleAudio = () => {
     if (stream) {
@@ -122,20 +137,26 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
         {/* Left: Camera Preview Tile */}
         <div className="lg:col-span-7 flex flex-col items-center">
           <div className="relative w-full aspect-video bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center group">
-            {videoEnabled && stream ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
-            ) : (
+            {/* Camera Video Stream (Always mounted for instant stream play) */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover scale-x-[-1] ${
+                videoEnabled && stream ? 'block' : 'hidden'
+              }`}
+            />
+
+            {/* Avatar Fallback */}
+            {(!videoEnabled || !stream) && (
               <div className="flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                 <div className="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-2xl font-bold text-slate-400 mb-3">
                   {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
                 </div>
-                <p className="text-xs font-medium text-slate-400">Camera is turned off</p>
+                <p className="text-xs font-medium text-slate-400">
+                  {!stream ? 'Starting camera...' : 'Camera is turned off'}
+                </p>
               </div>
             )}
 

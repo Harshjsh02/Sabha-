@@ -13,6 +13,38 @@ import {
 import { db, isFirebaseConfigured } from './firebase';
 import { ChatMessage, ReactionItem, RoomSettings } from './types';
 
+export async function createRoom(
+  roomId: string,
+  hostId: string,
+  hostName: string
+): Promise<RoomSettings> {
+  const defaultSettings: RoomSettings = {
+    roomId,
+    hostId,
+    hostName,
+    title: `Sabha ${roomId}`,
+    isLocked: false,
+    allowScreenShare: true,
+    allowChat: true,
+    allowUnmute: true,
+    requireVideo: false,
+    createdAt: Date.now(),
+  };
+
+  if (!isFirebaseConfigured() || !db) {
+    return defaultSettings;
+  }
+
+  try {
+    const roomRef = doc(db, 'rooms', roomId);
+    await setDoc(roomRef, defaultSettings);
+    return defaultSettings;
+  } catch (err) {
+    console.warn('Error creating room in Firestore:', err);
+    return defaultSettings;
+  }
+}
+
 export async function getOrCreateRoom(
   roomId: string,
   hostId: string,
@@ -22,11 +54,12 @@ export async function getOrCreateRoom(
     roomId,
     hostId,
     hostName,
-    title: `Sabha Meeting ${roomId}`,
+    title: `Sabha ${roomId}`,
     isLocked: false,
     allowScreenShare: true,
     allowChat: true,
     allowUnmute: true,
+    requireVideo: false,
     createdAt: Date.now(),
   };
 
