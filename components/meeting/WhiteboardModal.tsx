@@ -230,9 +230,9 @@ export function WhiteboardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col p-2 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col p-2 sm:p-4 overflow-hidden h-[100dvh] max-h-screen">
       {/* Top Toolbar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 sm:p-3 px-3 sm:px-5 mb-2 sm:mb-3 flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-slate-100 shadow-2xl">
+      <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 sm:p-3 px-3 sm:px-5 mb-2 flex flex-wrap items-center justify-between gap-2 text-slate-100 shadow-2xl flex-shrink-0 z-20">
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-slate-800">
             <span className="font-bold text-xs sm:text-sm tracking-tight text-white flex items-center gap-1.5 sm:gap-2">
@@ -327,7 +327,7 @@ export function WhiteboardModal({
           </button>
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/20 active:scale-95 cursor-pointer ml-1"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer ml-1"
             title="Close Whiteboard (Esc)"
           >
             <X className="w-4 h-4" />
@@ -337,7 +337,19 @@ export function WhiteboardModal({
       </div>
 
       {/* Canvas Area */}
-      <div className="flex-1 rounded-2xl overflow-hidden border border-slate-800 bg-[#090d16] shadow-2xl relative cursor-crosshair touch-none">
+      <div className="flex-1 min-h-0 rounded-2xl overflow-hidden border border-slate-800 bg-[#090d16] shadow-2xl relative cursor-crosshair touch-none">
+        {/* Floating Quick Close Button on Canvas */}
+        <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white font-bold text-xs transition shadow-xl shadow-rose-600/40 backdrop-blur-md active:scale-95 cursor-pointer border border-rose-400/30"
+            title="Close Whiteboard (Esc)"
+          >
+            <X className="w-4 h-4" />
+            <span>Close Board</span>
+          </button>
+        </div>
+
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
