@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, LogIn, ArrowRight, ShieldCheck, Lock, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, LogIn, ArrowRight, ShieldCheck, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 
 interface GreenRoomProps {
@@ -11,11 +11,46 @@ interface GreenRoomProps {
 }
 
 export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
-  const { user, signInWithGoogle, loading } = useAuth();
+  const { user, signInWithGoogle, signInWithGoogleRedirect, signOut, loading } = useAuth();
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [volumeLevel, setVolumeLevel] = useState(0);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleSignIn = async (useRedirect = false) => {
+    setAuthError(null);
+    setIsSigningIn(true);
+    try {
+      if (useRedirect) {
+        await signInWithGoogleRedirect();
+      } else {
+        await signInWithGoogle();
+      }
+    } catch (err: any) {
+      console.warn('Google sign-in notice in GreenRoom:', err);
+      if (err?.code === 'auth/popup-blocked') {
+        setAuthError(
+          'Google Sign-In pop-up was blocked by Chrome. Click the pop-up icon in your Chrome address bar to allow pop-ups, or use Full Page Sign-In below.'
+        );
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        const domain = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setAuthError(
+          `Domain "${domain}" is not authorized in Firebase Authentication yet. Please add "${domain}" to Firebase Console > Authentication > Settings > Authorized Domains.`
+        );
+      } else if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request'
+      ) {
+        setAuthError(null);
+      } else {
+        setAuthError(err?.message || 'Sign-in could not be completed. Please try again.');
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -230,16 +265,32 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
                 </div>
               </div>
 
+              {authError && (
+                <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex flex-col gap-2 animate-in fade-in duration-200">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">{authError}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSignIn(true)}
+                    className="self-start text-[11px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                  >
+                    Try Full Page Sign-in (Redirect) →
+                  </button>
+                </div>
+              )}
+
               <button
                 type="button"
-                onClick={signInWithGoogle}
-                disabled={loading}
-                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm flex items-center justify-center gap-3 transition shadow-xl cursor-pointer disabled:opacity-75"
+                onClick={() => handleSignIn(false)}
+                disabled={loading || isSigningIn}
+                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm flex items-center justify-center gap-3 transition shadow-xl cursor-pointer disabled:opacity-75 active:scale-98"
               >
-                {loading ? (
+                {loading || isSigningIn ? (
                   <>
                     <Loader2 className="w-4 h-4 text-slate-900 animate-spin" />
-                    <span>Verifying session...</span>
+                    <span>Signing in with Google...</span>
                   </>
                 ) : (
                   <>
@@ -248,6 +299,17 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
                   </>
                 )}
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleSignIn(true)}
+                  disabled={loading || isSigningIn}
+                  className="text-[11px] text-slate-400 hover:text-amber-400 transition underline cursor-pointer"
+                >
+                  Having trouble with pop-ups? Sign in via Full Page Redirect
+                </button>
+              </div>
             </div>
           ) : (
             /* Verified User Profile Card */
@@ -255,9 +317,19 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-medium text-slate-400">Authenticated Identity</span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                    <ShieldCheck className="w-3 h-3" /> Verified Google ID
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                      <ShieldCheck className="w-3 h-3" /> Verified Google ID
+                    </span>
+                    <button
+                      type="button"
+                      onClick={signOut}
+                      className="text-[10px] text-slate-400 hover:text-amber-400 underline transition cursor-pointer"
+                      title="Sign in with a different Google account"
+                    >
+                      Switch
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3 pt-1">

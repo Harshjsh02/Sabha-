@@ -114,16 +114,26 @@ export async function loginWithGoogle() {
     return await signInWithPopup(auth, googleProvider);
   } catch (err: any) {
     console.warn('Popup sign-in notice:', err?.code || err);
-    // Safari blocks popups by default unless user explicitly allowed or falls back to redirect
+    // If the user closed the popup or cancelled, do not force a redirect
     if (
-      err?.code === 'auth/popup-blocked' ||
       err?.code === 'auth/popup-closed-by-user' ||
       err?.code === 'auth/cancelled-popup-request'
     ) {
+      return null;
+    }
+    // If popup was blocked by browser, attempt redirect fallback
+    if (err?.code === 'auth/popup-blocked') {
       return await signInWithRedirect(auth, googleProvider);
     }
     throw err;
   }
+}
+
+export async function loginWithGoogleRedirect() {
+  if (!auth) {
+    throw new Error('Firebase Auth is not initialized. Please provide Firebase credentials.');
+  }
+  return await signInWithRedirect(auth, googleProvider);
 }
 
 export async function logoutUser() {
