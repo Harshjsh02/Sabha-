@@ -1,5 +1,14 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  Auth,
+  setPersistence,
+  browserLocalPersistence,
+} from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 export interface FirebaseConfigOptions {
@@ -74,6 +83,11 @@ if (currentConfig) {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(currentConfig);
     auth = getAuth(app);
+    if (typeof window !== 'undefined') {
+      setPersistence(auth, browserLocalPersistence).catch((err) => {
+        console.warn('Firebase persistence warning:', err);
+      });
+    }
     try {
       db = initializeFirestore(app, {
         experimentalAutoDetectLongPolling: true,
@@ -96,7 +110,20 @@ export async function loginWithGoogle() {
   if (!auth) {
     throw new Error('Firebase Auth is not initialized. Please provide Firebase credentials.');
   }
-  return await signInWithPopup(auth, googleProvider);
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (err: any) {
+    console.warn('Popup sign-in notice:', err?.code || err);
+    // Safari blocks popups by default unless user explicitly allowed or falls back to redirect
+    if (
+      err?.code === 'auth/popup-blocked' ||
+      err?.code === 'auth/popup-closed-by-user' ||
+      err?.code === 'auth/cancelled-popup-request'
+    ) {
+      return await signInWithRedirect(auth, googleProvider);
+    }
+    throw err;
+  }
 }
 
 export async function logoutUser() {

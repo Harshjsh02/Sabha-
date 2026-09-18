@@ -2,12 +2,19 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { LogIn, LogOut } from 'lucide-react';
 
 export function Navbar() {
+  const pathname = usePathname();
   const { user, signInWithGoogle, signOut } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  // In meeting rooms, hide the marketing navbar so the Zoom header suite takes full focus
+  if (pathname?.startsWith('/room/')) {
+    return null;
+  }
 
   return (
     <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">

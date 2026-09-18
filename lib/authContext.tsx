@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
 import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
 import { auth, db, loginWithGoogle, logoutUser, isFirebaseConfigured } from './firebase';
 import { UserProfile } from './types';
@@ -88,6 +88,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (ready && auth) {
+      // Check for redirect result on Safari or mobile browsers
+      getRedirectResult(auth)
+        .then((cred) => {
+          if (cred?.user) {
+            const profile: UserProfile = {
+              uid: cred.user.uid,
+              displayName: cred.user.displayName || 'Sabha Member',
+              email: cred.user.email,
+              photoURL: cred.user.photoURL,
+              isAnonymous: false,
+            };
+            setUser(profile);
+            logUserIpAndSession(cred.user);
+          }
+        })
+        .catch((err) => {
+          console.warn('Redirect auth result check notice:', err);
+        });
+
       const unsub = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
         if (firebaseUser) {
           const profile: UserProfile = {

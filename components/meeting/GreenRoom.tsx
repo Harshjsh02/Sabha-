@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, LogIn, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, LogIn, ArrowRight, ShieldCheck, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 
 interface GreenRoomProps {
@@ -234,10 +234,19 @@ export function GreenRoom({ roomId, onJoin }: GreenRoomProps) {
                 type="button"
                 onClick={signInWithGoogle}
                 disabled={loading}
-                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm flex items-center justify-center gap-3 transition shadow-xl"
+                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm flex items-center justify-center gap-3 transition shadow-xl cursor-pointer disabled:opacity-75"
               >
-                <LogIn className="w-4 h-4 text-slate-900" />
-                <span>Sign in with Google to Enter</span>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-slate-900 animate-spin" />
+                    <span>Verifying session...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4 text-slate-900" />
+                    <span>Sign in with Google to Enter</span>
+                  </>
+                )}
               </button>
             </div>
           ) : (
