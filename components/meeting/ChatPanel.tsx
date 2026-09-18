@@ -13,6 +13,7 @@ interface ChatPanelProps {
   onSendMessage: (text: string, to: string) => void;
   allowChat: boolean;
   isHost: boolean;
+  isCoHost?: boolean;
 }
 
 export function ChatPanel({
@@ -24,6 +25,7 @@ export function ChatPanel({
   onSendMessage,
   allowChat,
   isHost,
+  isCoHost = false,
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState('');
   const [recipient, setRecipient] = useState('everyone');
@@ -37,10 +39,12 @@ export function ChatPanel({
 
   if (!isOpen) return null;
 
+  const canBypassRestrictions = isHost || isCoHost;
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
-    if (!allowChat && !isHost) {
+    if (!allowChat && !canBypassRestrictions) {
       alert('The host has disabled in-meeting chat.');
       return;
     }
@@ -140,7 +144,7 @@ export function ChatPanel({
       </div>
 
       {/* Chat Disabled Warning */}
-      {!allowChat && !isHost && (
+      {!allowChat && !canBypassRestrictions && (
         <div className="px-4 py-2 bg-rose-500/10 border-t border-rose-500/20 text-rose-300 text-[11px] text-center">
           Chat has been disabled by the Sabha host.
         </div>
@@ -150,15 +154,15 @@ export function ChatPanel({
       <form onSubmit={handleSend} className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center gap-2">
         <input
           type="text"
-          disabled={!allowChat && !isHost}
+          disabled={!allowChat && !canBypassRestrictions}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder={!allowChat && !isHost ? 'Chat is disabled' : 'Type a message...'}
+          placeholder={!allowChat && !canBypassRestrictions ? 'Chat is disabled' : 'Type a message...'}
           className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={(!allowChat && !isHost) || !inputText.trim()}
+          disabled={(!allowChat && !canBypassRestrictions) || !inputText.trim()}
           className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 disabled:text-slate-600 transition"
         >
           <Send className="w-4 h-4" />

@@ -12,7 +12,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
-import { ChatMessage, ReactionItem, RoomSettings, WaitingParticipant } from './types';
+import { ChatMessage, ReactionItem, RoomSettings, WaitingParticipant, Participant } from './types';
 
 export async function createRoom(
   roomId: string,
@@ -475,3 +475,22 @@ export async function updateHostPresence(
     } catch {}
   }
 }
+
+/**
+ * Update a participant's role (e.g. isCoHost) in Firestore
+ */
+export async function updateParticipantRole(
+  roomId: string,
+  participantId: string,
+  updates: Partial<Participant>
+): Promise<void> {
+  if (isFirebaseConfigured() && db) {
+    try {
+      const participantRef = doc(db, `rooms/${roomId}/participants/${participantId}`);
+      await updateDoc(participantRef, updates);
+    } catch (err) {
+      console.warn('Error updating participant role in Firestore:', err);
+    }
+  }
+}
+

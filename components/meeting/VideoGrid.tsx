@@ -14,6 +14,8 @@ interface VideoGridProps {
   remoteScreenStreams?: Map<string, MediaStream>;
   onStopScreenShare?: () => void;
   isHostViewer: boolean;
+  isCoHostViewer?: boolean;
+  onToggleCoHost?: (id: string) => void;
   onMuteParticipant?: (id: string) => void;
   onKickParticipant?: (id: string) => void;
   viewMode?: 'gallery' | 'speaker' | 'multi-speaker';
@@ -169,6 +171,8 @@ export function VideoGrid({
   remoteScreenStreams,
   onStopScreenShare,
   isHostViewer,
+  isCoHostViewer = false,
+  onToggleCoHost,
   onMuteParticipant,
   onKickParticipant,
   viewMode = 'gallery',
@@ -239,8 +243,10 @@ export function VideoGrid({
                 stream={getStreamForParticipant(p.id)}
                 isLocal={p.id === localParticipant.id}
                 isHostViewer={isHostViewer}
+                isCoHostViewer={isCoHostViewer}
                 isPinned={pinnedId === p.id}
                 onTogglePin={togglePin}
+                onToggleCoHost={onToggleCoHost}
                 onMuteParticipant={onMuteParticipant}
                 onKickParticipant={onKickParticipant}
               />
@@ -270,8 +276,10 @@ export function VideoGrid({
             stream={getStreamForParticipant(speaker.id)}
             isLocal={speaker.id === localParticipant.id}
             isHostViewer={isHostViewer}
+            isCoHostViewer={isCoHostViewer}
             isPinned={pinnedId === speaker.id}
             onTogglePin={togglePin}
+            onToggleCoHost={onToggleCoHost}
             onMuteParticipant={onMuteParticipant}
             onKickParticipant={onKickParticipant}
           />
@@ -287,8 +295,10 @@ export function VideoGrid({
                   stream={getStreamForParticipant(p.id)}
                   isLocal={p.id === localParticipant.id}
                   isHostViewer={isHostViewer}
+                  isCoHostViewer={isCoHostViewer}
                   isPinned={pinnedId === p.id}
                   onTogglePin={togglePin}
+                  onToggleCoHost={onToggleCoHost}
                   onMuteParticipant={onMuteParticipant}
                   onKickParticipant={onKickParticipant}
                 />
@@ -327,8 +337,10 @@ export function VideoGrid({
                 stream={getStreamForParticipant(p.id)}
                 isLocal={p.id === localParticipant.id}
                 isHostViewer={isHostViewer}
+                isCoHostViewer={isCoHostViewer}
                 isPinned={pinnedId === p.id}
                 onTogglePin={togglePin}
+                onToggleCoHost={onToggleCoHost}
                 onMuteParticipant={onMuteParticipant}
                 onKickParticipant={onKickParticipant}
               />
@@ -346,8 +358,10 @@ export function VideoGrid({
                   stream={getStreamForParticipant(p.id)}
                   isLocal={p.id === localParticipant.id}
                   isHostViewer={isHostViewer}
+                  isCoHostViewer={isCoHostViewer}
                   isPinned={pinnedId === p.id}
                   onTogglePin={togglePin}
+                  onToggleCoHost={onToggleCoHost}
                   onMuteParticipant={onMuteParticipant}
                   onKickParticipant={onKickParticipant}
                 />
@@ -370,6 +384,7 @@ export function VideoGrid({
             stream={localStream}
             isLocal={true}
             isHostViewer={isHostViewer}
+            isCoHostViewer={isCoHostViewer}
             isPinned={false}
             onTogglePin={togglePin}
           />
@@ -401,6 +416,7 @@ export function VideoGrid({
           stream={localStream}
           isLocal={true}
           isHostViewer={isHostViewer}
+          isCoHostViewer={isCoHostViewer}
           isPinned={pinnedId === localParticipant.id}
           onTogglePin={togglePin}
         />
@@ -413,8 +429,10 @@ export function VideoGrid({
             stream={remoteStreams.get(p.id) || null}
             isLocal={false}
             isHostViewer={isHostViewer}
+            isCoHostViewer={isCoHostViewer}
             isPinned={pinnedId === p.id}
             onTogglePin={togglePin}
+            onToggleCoHost={onToggleCoHost}
             onMuteParticipant={onMuteParticipant}
             onKickParticipant={onKickParticipant}
           />

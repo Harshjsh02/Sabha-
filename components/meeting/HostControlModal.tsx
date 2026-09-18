@@ -10,6 +10,7 @@ interface HostControlModalProps {
   roomSettings: RoomSettings;
   onUpdateSettings: (updates: Partial<RoomSettings>) => void;
   onEndMeetingForAll: () => void;
+  isHost?: boolean;
 }
 
 export function HostControlModal({
@@ -18,6 +19,7 @@ export function HostControlModal({
   roomSettings,
   onUpdateSettings,
   onEndMeetingForAll,
+  isHost = true,
 }: HostControlModalProps) {
   if (!isOpen) return null;
 
@@ -168,19 +170,21 @@ export function HostControlModal({
           </div>
 
           {/* End Sabha for all */}
-          <div className="pt-2">
-            <button
-              onClick={() => {
-                if (confirm('Are you sure you want to end this Sabha for all participants?')) {
-                  onEndMeetingForAll();
-                }
-              }}
-              className="w-full py-2.5 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/30 font-semibold text-xs transition flex items-center justify-center gap-2"
-            >
-              <AlertTriangle className="w-4 h-4" />
-              <span>End Sabha for Everyone</span>
-            </button>
-          </div>
+          {isHost && (
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to end this Sabha for all participants?')) {
+                    onEndMeetingForAll();
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/30 font-semibold text-xs transition flex items-center justify-center gap-2"
+              >
+                <AlertTriangle className="w-4 h-4" />
+                <span>End Sabha for Everyone</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

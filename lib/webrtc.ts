@@ -430,9 +430,13 @@ export class WebRTCManager {
     }
 
     if ((signal.type as any) === 'participant-update') {
-      const updates = signal.payload as Partial<Participant>;
+      const updates = signal.payload as Partial<Participant> & { targetPeerId?: string };
+      const targetId = updates.targetPeerId || fromPeerId;
+      if (targetId === this.localParticipant.id) {
+        Object.assign(this.localParticipant, updates);
+      }
       this.cachedParticipants = this.cachedParticipants.map((p) =>
-        p.id === fromPeerId ? { ...p, ...updates } : p
+        p.id === targetId ? { ...p, ...updates } : p
       );
       this.onParticipantsChanged(this.cachedParticipants);
       return;
@@ -601,6 +605,30 @@ export class WebRTCManager {
         const participantRef = doc(db, `rooms/${this.roomId}/participants/${this.localParticipant.id}`);
         await updateDoc(participantRef, updates);
       } catch {}
+    }
+  }
+
+  public async updatePeerRole(peerId: string, updates: Partial<Participant>) {
+    this.cachedParticipants = this.cachedParticipants.map((p) =>
+      p.id === peerId ? { ...p, ...updates } : p
+    );
+    this.onParticipantsChanged(this.cachedParticipants);
+
+    this.sendSignal({
+      from: this.localParticipant.id,
+      to: 'broadcast',
+      type: 'participant-update' as any,
+      payload: { targetPeerId: peerId, ...updates },
+      timestamp: Date.now(),
+    });
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        const participantRef = doc(db, `rooms/${this.roomId}/participants/${peerId}`);
+        await updateDoc(participantRef, updates);
+      } catch (err) {
+        console.warn('Error updating peer role in Firestore:', err);
+      }
     }
   }
 

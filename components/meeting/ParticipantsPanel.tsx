@@ -17,6 +17,8 @@ import {
   Unlock,
   UserPlus,
   Check,
+  ShieldCheck,
+  ShieldX,
 } from 'lucide-react';
 
 interface ParticipantsPanelProps {
@@ -25,6 +27,7 @@ interface ParticipantsPanelProps {
   participants: Participant[];
   currentUserId: string;
   isHost: boolean;
+  isCoHost?: boolean;
   isLocked: boolean;
   waitingList?: WaitingParticipant[];
   onAdmit?: (id: string) => void;
@@ -33,6 +36,7 @@ interface ParticipantsPanelProps {
   onMuteAll: () => void;
   onMuteParticipant: (id: string) => void;
   onKickParticipant: (id: string) => void;
+  onToggleCoHost?: (id: string) => void;
   onToggleLock: () => void;
   onOpenInvite?: () => void;
 }
@@ -43,6 +47,7 @@ export function ParticipantsPanel({
   participants,
   currentUserId,
   isHost,
+  isCoHost = false,
   isLocked,
   waitingList = [],
   onAdmit,
@@ -51,10 +56,13 @@ export function ParticipantsPanel({
   onMuteAll,
   onMuteParticipant,
   onKickParticipant,
+  onToggleCoHost,
   onToggleLock,
   onOpenInvite,
 }: ParticipantsPanelProps) {
   if (!isOpen) return null;
+
+  const canModerate = isHost || isCoHost;
 
   return (
     <div className="fixed inset-y-0 right-0 sm:relative w-full sm:w-80 md:w-96 bg-slate-900 border-l border-slate-800 flex flex-col h-full z-40 text-slate-100 shadow-2xl">
@@ -87,12 +95,12 @@ export function ParticipantsPanel({
         </div>
       )}
 
-      {/* Host Quick Admin Bar */}
-      {isHost && (
+      {/* Moderator Quick Admin Bar (Host & Co-hosts) */}
+      {canModerate && (
         <div className="p-3 bg-slate-950/40 border-b border-slate-800 flex items-center gap-2">
           <button
             onClick={onMuteAll}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-semibold border border-slate-700 transition"
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-semibold border border-slate-700 transition cursor-pointer"
           >
             <VolumeX className="w-3.5 h-3.5" />
             <span>Mute All</span>
@@ -100,7 +108,7 @@ export function ParticipantsPanel({
 
           <button
             onClick={onToggleLock}
-            className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold border transition ${
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold border transition cursor-pointer ${
               isLocked
                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
                 : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
@@ -112,8 +120,8 @@ export function ParticipantsPanel({
         </div>
       )}
 
-      {/* Waiting Room Section (Host Only) */}
-      {isHost && waitingList.length > 0 && (
+      {/* Waiting Room Section (Host & Co-hosts) */}
+      {canModerate && waitingList.length > 0 && (
         <div className="p-3 border-b border-amber-500/20 bg-amber-500/5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
@@ -211,8 +219,13 @@ export function ParticipantsPanel({
                       {p.name} {isMe && '(You)'}
                     </span>
                     {p.isHost && (
-                      <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30">
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30">
                         <Crown className="w-2.5 h-2.5" /> Host
+                      </span>
+                    )}
+                    {p.isCoHost && !p.isHost && (
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold border border-indigo-500/30">
+                        <ShieldCheck className="w-2.5 h-2.5" /> Co-host
                       </span>
                     )}
                   </div>
@@ -224,7 +237,7 @@ export function ParticipantsPanel({
                 </div>
               </div>
 
-              {/* Right: Audio/Video status & Host Controls */}
+              {/* Right: Audio/Video status & Moderator Controls */}
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <div
                   className={`p-1 rounded ${
@@ -244,22 +257,42 @@ export function ParticipantsPanel({
                   {p.videoEnabled ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
                 </div>
 
-                {isHost && !isMe && (
+                {canModerate && !isMe && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-1 border-l border-slate-800">
-                    <button
-                      onClick={() => onMuteParticipant(p.id)}
-                      className="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-amber-400 transition"
-                      title="Mute Participant"
-                    >
-                      <VolumeX className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onKickParticipant(p.id)}
-                      className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-                      title="Remove from Sabha"
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Host can promote/demote Co-host */}
+                    {isHost && onToggleCoHost && !p.isHost && (
+                      <button
+                        onClick={() => onToggleCoHost(p.id)}
+                        className={`p-1 rounded transition cursor-pointer ${
+                          p.isCoHost
+                            ? 'text-indigo-400 hover:text-rose-400 hover:bg-rose-500/10'
+                            : 'text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10'
+                        }`}
+                        title={p.isCoHost ? 'Remove Co-host' : 'Make Co-host'}
+                      >
+                        {p.isCoHost ? <ShieldX className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+
+                    {/* Mute and Kick: Host can moderate anyone; Co-host can only moderate regular attendees */}
+                    {(isHost || (!p.isHost && !p.isCoHost)) && (
+                      <>
+                        <button
+                          onClick={() => onMuteParticipant(p.id)}
+                          className="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-amber-400 transition cursor-pointer"
+                          title="Mute Participant"
+                        >
+                          <VolumeX className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onKickParticipant(p.id)}
+                          className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                          title="Remove from Sabha"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

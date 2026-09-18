@@ -27,6 +27,7 @@ export class LiveKitRoomManager {
   public onDataReceived: (payload: any, peerId: string) => void = () => {};
   public onKicked: (reason?: string) => void = () => {};
   public onLocalStreamChanged: (stream: MediaStream) => void = () => {};
+  public onRoleChanged: (isCoHost: boolean) => void = () => {};
 
   private remoteMediaStreams: Map<string, MediaStream> = new Map();
   private remoteScreenStreams: Map<string, MediaStream> = new Map();
@@ -190,6 +191,10 @@ export class LiveKitRoomManager {
         if (data.type === 'participant-state-update' && data.participantId) {
           const current = this.participantStateOverrides.get(data.participantId) || {};
           this.participantStateOverrides.set(data.participantId, { ...current, ...data.updates });
+          if (data.participantId === this.localParticipantInfo.id && data.updates?.isCoHost !== undefined) {
+            this.localParticipantInfo.isCoHost = data.updates.isCoHost;
+            this.onRoleChanged(data.updates.isCoHost);
+          }
           this.syncParticipants();
           return;
         }
@@ -415,6 +420,18 @@ export class LiveKitRoomManager {
     }
   }
 
+  public updatePeerState(participantId: string, updates: Partial<Participant>) {
+    const current = this.participantStateOverrides.get(participantId) || {};
+    this.participantStateOverrides.set(participantId, { ...current, ...updates });
+    this.syncParticipants();
+
+    this.sendData({
+      type: 'participant-state-update',
+      participantId,
+      updates,
+    });
+  }
+
   private syncParticipants() {
     const list: Participant[] = [];
 
@@ -439,6 +456,7 @@ export class LiveKitRoomManager {
       const override = this.participantStateOverrides.get(rp.identity);
       const hasVideo = override?.videoEnabled !== undefined ? override.videoEnabled : calculatedHasVideo;
       const hasAudio = override?.audioEnabled !== undefined ? override.audioEnabled : calculatedHasAudio;
+      const isCoHost = override?.isCoHost !== undefined ? override.isCoHost : false;
 
       list.push({
         id: rp.identity,
@@ -446,10 +464,11 @@ export class LiveKitRoomManager {
         name: rp.name || rp.identity,
         photoURL: photoURL,
         isHost: false, // coordinated via Firestore roomSettings
+        isCoHost: isCoHost,
         audioEnabled: hasAudio,
         videoEnabled: hasVideo,
         screenSharing: Boolean(rp.isScreenShareEnabled),
-        isHandRaised: false,
+        isHandRaised: Boolean(override?.isHandRaised),
         isMutedByHost: false,
         joinedAt: rp.joinedAt ? rp.joinedAt.getTime() : Date.now(),
       });

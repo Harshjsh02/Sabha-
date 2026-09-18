@@ -14,6 +14,8 @@ import {
   VolumeX,
   UserX,
   Maximize2,
+  ShieldCheck,
+  ShieldX,
 } from 'lucide-react';
 
 interface VideoTileProps {
@@ -21,8 +23,10 @@ interface VideoTileProps {
   stream: MediaStream | null;
   isLocal: boolean;
   isHostViewer: boolean;
+  isCoHostViewer?: boolean;
   isPinned: boolean;
   onTogglePin: (id: string) => void;
+  onToggleCoHost?: (id: string) => void;
   onMuteParticipant?: (id: string) => void;
   onKickParticipant?: (id: string) => void;
 }
@@ -32,8 +36,10 @@ export function VideoTile({
   stream,
   isLocal,
   isHostViewer,
+  isCoHostViewer = false,
   isPinned,
   onTogglePin,
+  onToggleCoHost,
   onMuteParticipant,
   onKickParticipant,
 }: VideoTileProps) {
@@ -181,52 +187,88 @@ export function VideoTile({
               <span>सभापति</span>
             </div>
           )}
+          {participant.isCoHost && !participant.isHost && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 text-[11px] font-semibold backdrop-blur-sm">
+              <ShieldCheck className="w-3 h-3 text-indigo-400" />
+              <span>सह-सभापति</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
           <button
             onClick={() => onTogglePin(participant.id)}
-            className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-700/50 transition"
+            className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-700/50 transition cursor-pointer"
             title={isPinned ? 'Unpin' : 'Pin to main stage'}
           >
             {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
           </button>
 
-          {isHostViewer && !isLocal && (
+          {(isHostViewer || isCoHostViewer) && !isLocal && (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-700/50 transition"
-                title="Host Actions"
+                className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-700/50 transition cursor-pointer"
+                title="Moderator Actions"
               >
                 <MoreVertical className="w-3.5 h-3.5" />
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-1 w-44 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 text-xs text-slate-200 z-50">
-                  {onMuteParticipant && (
-                    <button
-                      onClick={() => {
-                        onMuteParticipant(participant.id);
-                        setMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-800 flex items-center gap-2 text-slate-300 hover:text-white"
-                    >
-                      <VolumeX className="w-3.5 h-3.5 text-amber-400" />
-                      Mute Audio
-                    </button>
+                <div className="absolute right-0 mt-1 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 text-xs text-slate-200 z-50 divide-y divide-slate-800">
+                  {/* Co-host assignment (Host only, and cannot target Host) */}
+                  {isHostViewer && onToggleCoHost && !participant.isHost && (
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          onToggleCoHost(participant.id);
+                          setMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-800 flex items-center gap-2 text-slate-200 hover:text-white transition cursor-pointer"
+                      >
+                        {participant.isCoHost ? (
+                          <>
+                            <ShieldX className="w-3.5 h-3.5 text-rose-400" />
+                            <span>Remove Co-host</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Make Co-host</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
-                  {onKickParticipant && (
-                    <button
-                      onClick={() => {
-                        onKickParticipant(participant.id);
-                        setMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-rose-500/10 flex items-center gap-2 text-rose-400"
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                      Remove from Sabha
-                    </button>
+
+                  {/* Mute and Kick: Host can moderate anyone; Co-host can only moderate attendees (not Host or other Co-hosts) */}
+                  {(isHostViewer || (!participant.isHost && !participant.isCoHost)) && (
+                    <div className="py-1">
+                      {onMuteParticipant && (
+                        <button
+                          onClick={() => {
+                            onMuteParticipant(participant.id);
+                            setMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-slate-800 flex items-center gap-2 text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Mute Audio</span>
+                        </button>
+                      )}
+                      {onKickParticipant && (
+                        <button
+                          onClick={() => {
+                            onKickParticipant(participant.id);
+                            setMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-rose-500/10 flex items-center gap-2 text-rose-400 transition cursor-pointer"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                          <span>Remove from Sabha</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

@@ -19,6 +19,7 @@ import {
 
 interface MeetingControlsProps {
   isHost: boolean;
+  isCoHost?: boolean;
   audioEnabled: boolean;
   videoEnabled: boolean;
   isTogglingAudio?: boolean;
@@ -45,6 +46,7 @@ interface MeetingControlsProps {
 
 export function MeetingControls({
   isHost,
+  isCoHost = false,
   audioEnabled,
   videoEnabled,
   isTogglingAudio = false,
@@ -132,8 +134,8 @@ export function MeetingControls({
 
       {/* Center section: Main Zoom controls */}
       <div className="flex items-center gap-1 sm:gap-2">
-        {/* Host Security Settings */}
-        {isHost && (
+        {/* Host/Co-Host Security Settings */}
+        {(isHost || isCoHost) && (
           <button
             onClick={onOpenSecurityModal}
             className="flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl text-slate-200 hover:bg-slate-800/80 transition"

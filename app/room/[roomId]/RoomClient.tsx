@@ -76,6 +76,7 @@ export function RoomClient({ roomId, isHostParam }: RoomClientProps) {
       name: name,
       photoURL: user?.photoURL || null,
       isHost: isHost,
+      isCoHost: false,
       audioEnabled,
       videoEnabled,
       screenSharing: false,

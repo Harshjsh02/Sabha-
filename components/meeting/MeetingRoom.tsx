@@ -18,6 +18,7 @@ import {
   denyParticipant,
   admitAllParticipants,
   updateHostPresence,
+  updateParticipantRole,
 } from '@/lib/roomService';
 import { useAuth } from '@/lib/authContext';
 import { VideoGrid } from './VideoGrid';
@@ -236,6 +237,15 @@ export function MeetingRoom({
               setRemoteParticipants(participants);
             };
 
+            lkManager.onRoleChanged = (isCoHost) => {
+              setLocalParticipant((p) => ({ ...p, isCoHost }));
+              if (isCoHost) {
+                alert('You have been made a Co-host (सह-सभापति) of this Sabha!');
+              } else {
+                alert('Your Co-host privileges were removed.');
+              }
+            };
+
             // Whiteboard & data packets
             lkManager.onDataReceived = (payload) => {
               if (payload?.type === 'whiteboard') {
@@ -335,6 +345,20 @@ export function MeetingRoom({
         };
 
         manager.onParticipantsChanged = (participants) => {
+          const self = participants.find((p) => p.id === initialParticipant.id);
+          if (self && self.isCoHost !== undefined) {
+            setLocalParticipant((prev) => {
+              if (prev.isCoHost !== self.isCoHost) {
+                if (self.isCoHost) {
+                  alert('You have been made a Co-host (सह-सभापति) of this Sabha!');
+                } else if (prev.isCoHost) {
+                  alert('Your Co-host privileges were removed.');
+                }
+                return { ...prev, isCoHost: self.isCoHost };
+              }
+              return prev;
+            });
+          }
           const others = participants.filter((p) => p.id !== initialParticipant.id);
           setRemoteParticipants(others);
         };
@@ -426,14 +450,14 @@ export function MeetingRoom({
     };
   }, [roomId, initialParticipant.id]);
 
-  // Subscribe to waiting room for host
+  // Subscribe to waiting room for host and co-host
   useEffect(() => {
-    if (!localParticipant.isHost) return;
+    if (!localParticipant.isHost && !localParticipant.isCoHost) return;
     const unsub = subscribeToWaitingRoom(roomId, (list) => {
       setWaitingList(list);
     });
     return () => unsub();
-  }, [roomId, localParticipant.isHost]);
+  }, [roomId, localParticipant.isHost, localParticipant.isCoHost]);
 
   // Reset unread chat count when chat opens
   useEffect(() => {
@@ -444,7 +468,7 @@ export function MeetingRoom({
 
   // Toggle Audio
   const handleToggleAudio = async () => {
-    if (roomSettings.allowUnmute === false && !localParticipant.isHost && !localParticipant.audioEnabled) {
+    if (roomSettings.allowUnmute === false && !localParticipant.isHost && !localParticipant.isCoHost && !localParticipant.audioEnabled) {
       alert('The host has disabled participants from unmuting.');
       return;
     }
@@ -510,7 +534,7 @@ export function MeetingRoom({
 
   // Automatically turn on video if host forces cameras on
   useEffect(() => {
-    if (roomSettings.requireVideo && !localParticipant.isHost && !localParticipant.videoEnabled) {
+    if (roomSettings.requireVideo && !localParticipant.isHost && !localParticipant.isCoHost && !localParticipant.videoEnabled) {
       const enableVideoAutomatically = async () => {
         try {
           setLocalParticipant((p) => ({ ...p, videoEnabled: true }));
@@ -531,11 +555,11 @@ export function MeetingRoom({
       };
       enableVideoAutomatically();
     }
-  }, [roomSettings.requireVideo, localParticipant.isHost, localParticipant.videoEnabled, isLiveKitSFU, localStream]);
+  }, [roomSettings.requireVideo, localParticipant.isHost, localParticipant.isCoHost, localParticipant.videoEnabled, isLiveKitSFU, localStream]);
 
   // Toggle Video
   const handleToggleVideo = async () => {
-    if (roomSettings.requireVideo && !localParticipant.isHost && localParticipant.videoEnabled) {
+    if (roomSettings.requireVideo && !localParticipant.isHost && !localParticipant.isCoHost && localParticipant.videoEnabled) {
       alert('The host (सभापति) requires all participants to keep their camera on.');
       return;
     }
@@ -605,7 +629,7 @@ export function MeetingRoom({
 
   // Toggle Screen Share
   const handleToggleScreenShare = async () => {
-    if (roomSettings.allowScreenShare === false && !localParticipant.isHost && !localParticipant.screenSharing) {
+    if (roomSettings.allowScreenShare === false && !localParticipant.isHost && !localParticipant.isCoHost && !localParticipant.screenSharing) {
       alert('The host has disabled screen sharing for participants.');
       return;
     }
@@ -908,21 +932,75 @@ export function MeetingRoom({
     }
   };
 
-  // Host Controls
+  // Moderator Controls (Host & Co-host)
   const handleMuteAll = () => {
     rtcManagerRef.current?.sendMuteAllCommand(remoteParticipants);
   };
 
   const handleMuteParticipant = (peerId: string) => {
+    const target = remoteParticipants.find((p) => p.id === peerId);
+    if (!localParticipant.isHost && target?.isHost) {
+      alert('The meeting host cannot be muted by a co-host.');
+      return;
+    }
     rtcManagerRef.current?.sendMuteCommand(peerId);
+    if (isLiveKitSFU && liveKitManagerRef.current) {
+      liveKitManagerRef.current.updatePeerState(peerId, { audioEnabled: false });
+    }
   };
 
   const handleKickParticipant = (peerId: string) => {
+    const target = remoteParticipants.find((p) => p.id === peerId);
+    if (target?.isHost) {
+      alert('The meeting host cannot be removed.');
+      return;
+    }
+    if (!localParticipant.isHost && target?.isCoHost) {
+      alert('Co-hosts cannot remove other co-hosts.');
+      return;
+    }
     rtcManagerRef.current?.sendKickCommand(peerId);
+    if (isLiveKitSFU && liveKitManagerRef.current) {
+      liveKitManagerRef.current.sendData({
+        type: 'kick-command',
+        participantId: peerId,
+        payload: { reason: 'kicked' },
+      });
+    }
     if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
       const payload = JSON.stringify({ roomId, participantId: peerId });
       navigator.sendBeacon('/api/room/leave', new Blob([payload], { type: 'application/json' }));
     }
+  };
+
+  // Toggle Co-host role for a participant (Host only)
+  const handleToggleCoHost = async (targetPeerId: string) => {
+    if (!localParticipant.isHost) {
+      alert('Only the host can assign or remove co-hosts.');
+      return;
+    }
+
+    const target = remoteParticipants.find((p) => p.id === targetPeerId);
+    if (!target) return;
+
+    const nextCoHost = !target.isCoHost;
+
+    // 1. Optimistic UI update
+    setRemoteParticipants((prev) =>
+      prev.map((p) => (p.id === targetPeerId ? { ...p, isCoHost: nextCoHost } : p))
+    );
+
+    // 2. Broadcast via WebRTC or LiveKit
+    if (isLiveKitSFU && liveKitManagerRef.current) {
+      liveKitManagerRef.current.updatePeerState(targetPeerId, { isCoHost: nextCoHost });
+    } else {
+      rtcManagerRef.current?.updatePeerRole(targetPeerId, { isCoHost: nextCoHost });
+    }
+
+    // 3. Persist in Firestore
+    updateParticipantRole(roomId, targetPeerId, { isCoHost: nextCoHost }).catch((err) => {
+      console.warn('Error saving cohost state to Firestore:', err);
+    });
   };
 
   const handleToggleLock = () => {
@@ -1236,7 +1314,7 @@ export function MeetingRoom({
       {/* Main Body: Video Grid + Side Panels */}
       <div className="flex-1 flex min-h-0 relative">
         {/* Floating Host Knocking Notification Banner */}
-        {localParticipant.isHost && (
+        {(localParticipant.isHost || localParticipant.isCoHost) && (
           <WaitingRoomBanner
             waitingList={waitingList}
             onAdmit={handleAdmitWaiting}
@@ -1258,6 +1336,8 @@ export function MeetingRoom({
           remoteScreenStreams={remoteScreenStreams}
           onStopScreenShare={handleToggleScreenShare}
           isHostViewer={localParticipant.isHost}
+          isCoHostViewer={Boolean(localParticipant.isCoHost)}
+          onToggleCoHost={handleToggleCoHost}
           onMuteParticipant={handleMuteParticipant}
           onKickParticipant={handleKickParticipant}
           viewMode={viewMode}
@@ -1273,6 +1353,7 @@ export function MeetingRoom({
           onSendMessage={handleSendMessage}
           allowChat={roomSettings.allowChat}
           isHost={localParticipant.isHost}
+          isCoHost={Boolean(localParticipant.isCoHost)}
         />
 
         {/* Side Panel: Participants Roster */}
@@ -1282,6 +1363,7 @@ export function MeetingRoom({
           participants={[localParticipant, ...remoteParticipants]}
           currentUserId={localParticipant.id}
           isHost={localParticipant.isHost}
+          isCoHost={Boolean(localParticipant.isCoHost)}
           isLocked={roomSettings.isLocked}
           waitingList={waitingList}
           onAdmit={handleAdmitWaiting}
@@ -1290,6 +1372,7 @@ export function MeetingRoom({
           onMuteAll={handleMuteAll}
           onMuteParticipant={handleMuteParticipant}
           onKickParticipant={handleKickParticipant}
+          onToggleCoHost={handleToggleCoHost}
           onToggleLock={handleToggleLock}
           onOpenInvite={() => setIsShareModalOpen(true)}
         />
@@ -1298,6 +1381,7 @@ export function MeetingRoom({
       {/* Zoom-Style Bottom Toolbar */}
       <MeetingControls
         isHost={localParticipant.isHost}
+        isCoHost={Boolean(localParticipant.isCoHost)}
         audioEnabled={localParticipant.audioEnabled}
         videoEnabled={localParticipant.videoEnabled}
         screenSharing={localParticipant.screenSharing}
@@ -1340,6 +1424,7 @@ export function MeetingRoom({
         roomSettings={roomSettings}
         onUpdateSettings={handleUpdateSettings}
         onEndMeetingForAll={handleEndMeetingForAll}
+        isHost={localParticipant.isHost}
       />
 
       {/* Share / Invite Modal */}

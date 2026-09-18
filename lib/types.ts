@@ -12,6 +12,7 @@ export interface Participant {
   name: string;
   photoURL?: string | null;
   isHost: boolean;
+  isCoHost?: boolean;
   audioEnabled: boolean;
   videoEnabled: boolean;
   screenSharing: boolean;
