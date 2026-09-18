@@ -58,7 +58,11 @@ export function RoomClient({ roomId, isHostParam }: RoomClientProps) {
     videoEnabled: boolean,
     stream: MediaStream | null
   ) => {
-    const peerId = user?.uid || 'peer_' + Math.random().toString(36).substring(2, 9);
+    // Generate a unique session ID per device so multiple devices (same account or different accounts)
+    // each receive their own unique participant tile, stream, and WebRTC connection.
+    const sessionId = Math.random().toString(36).substring(2, 8);
+    const peerId = user?.uid ? `${user.uid}_${sessionId}` : `peer_${sessionId}`;
+    const userUid = user?.uid || peerId;
 
     // Host check: user UID matches hostId in Firestore or host query param
     const isHost = Boolean(
@@ -68,7 +72,7 @@ export function RoomClient({ roomId, isHostParam }: RoomClientProps) {
 
     const newParticipant: Participant = {
       id: peerId,
-      uid: peerId,
+      uid: userUid,
       name: name,
       photoURL: user?.photoURL || null,
       isHost: isHost,
@@ -96,7 +100,7 @@ export function RoomClient({ roomId, isHostParam }: RoomClientProps) {
     if (shouldWait) {
       const waitData: WaitingParticipant = {
         id: peerId,
-        uid: peerId,
+        uid: userUid,
         name: name,
         photoURL: user?.photoURL || null,
         status: 'waiting',

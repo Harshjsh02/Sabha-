@@ -60,6 +60,8 @@ export function clearLocalFirebaseConfig() {
   }
 }
 
+import { initializeFirestore } from 'firebase/firestore';
+
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
@@ -72,7 +74,13 @@ if (currentConfig) {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(currentConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    try {
+      db = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+      });
+    } catch {
+      db = getFirestore(app);
+    }
   } catch (error) {
     console.error('Firebase initialization error:', error);
   }

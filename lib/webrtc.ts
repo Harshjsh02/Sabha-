@@ -119,15 +119,15 @@ export class WebRTCManager {
         } catch {}
       }, 5000);
 
-      // 2. Listen to participants list and prune stale participants
+      // 2. Listen to participants list and prune stale participants (with clock drift tolerance)
       const participantsCol = collection(db, `rooms/${this.roomId}/participants`);
       this.unsubParticipants = onSnapshot(participantsCol, (snapshot) => {
         const now = Date.now();
         const list: Participant[] = [];
         snapshot.forEach((d) => {
           const p = d.data() as Participant & { lastSeen?: number };
-          // If a peer's heartbeat is older than 15s (e.g. killed app/browser without clean unload), prune them
-          if (p.id !== this.localParticipant.id && p.lastSeen && now - p.lastSeen > 15000) {
+          // Only prune if a peer's heartbeat is older than 60s (prevents cross-device clock skew from deleting active peers)
+          if (p.id !== this.localParticipant.id && p.lastSeen && now - p.lastSeen > 60000) {
             deleteDoc(d.ref).catch(() => {});
             return;
           }
@@ -151,9 +151,12 @@ export class WebRTCManager {
             const data = change.doc.data() as SignalData;
             await this.handleSignalMessage(data);
             // Delete processed signal to keep firestore footprint minimal
-            try {
-              await deleteDoc(change.doc.ref);
-            } catch {}
+            // Only delete if specifically addressed to me (never delete broadcast signals so other peers receive them)
+            if (data.to === this.localParticipant.id) {
+              try {
+                await deleteDoc(change.doc.ref);
+              } catch {}
+            }
           }
         });
       });
@@ -253,11 +256,17 @@ export class WebRTCManager {
       };
     };
 
-    // Renegotiation handler for dynamically added tracks
+    // Renegotiation handler for dynamically added tracks (e.g. screen share or video start)
+    let isInitialSetup = true;
+    setTimeout(() => {
+      isInitialSetup = false;
+    }, 2000);
+
     pc.onnegotiationneeded = async () => {
       try {
-        if (pc.signalingState !== 'stable') return;
+        if (isInitialSetup || pc.signalingState !== 'stable') return;
         const offer = await pc.createOffer();
+        if (pc.signalingState !== 'stable') return;
         await pc.setLocalDescription(offer);
         await this.sendSignal({
           from: this.localParticipant.id,
@@ -376,17 +385,37 @@ export class WebRTCManager {
     let pc = this.peerConnections.get(fromPeerId);
     if (!pc) {
       // Other peer initiated connection
+      const isInitiator = this.localParticipant.id > fromPeerId;
+      this.isPolite.set(fromPeerId, !isInitiator);
       pc = await this.createPeerConnection(fromPeerId, false);
     }
 
     if (signal.type === 'offer') {
       try {
+        const isPolite = this.isPolite.get(fromPeerId) ?? (this.localParticipant.id < fromPeerId);
+        const offerCollision = pc.signalingState !== 'stable';
+
+        if (offerCollision) {
+          if (!isPolite) {
+            console.warn(`[WebRTC] Impolite peer ignoring colliding offer from ${fromPeerId}`);
+            return;
+          }
+          console.log(`[WebRTC] Polite peer rolling back to accept offer from ${fromPeerId}`);
+          try {
+            await pc.setLocalDescription({ type: 'rollback' });
+          } catch (rollbackErr) {
+            console.warn('[WebRTC] Rollback notice:', rollbackErr);
+          }
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
 
         // Flush any queued candidates
         const pending = this.pendingCandidates.get(fromPeerId) || [];
         for (const candidate of pending) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch {}
         }
         this.pendingCandidates.delete(fromPeerId);
 
@@ -405,11 +434,19 @@ export class WebRTCManager {
       }
     } else if (signal.type === 'answer') {
       try {
+        // Prevent InvalidStateError if answer arrives when already in stable state
+        if (pc.signalingState !== 'have-local-offer') {
+          console.warn(`[WebRTC] Ignoring unexpected answer in signalingState: ${pc.signalingState}`);
+          return;
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
 
         const pending = this.pendingCandidates.get(fromPeerId) || [];
         for (const candidate of pending) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch {}
         }
         this.pendingCandidates.delete(fromPeerId);
       } catch (err) {
@@ -514,19 +551,14 @@ export class WebRTCManager {
   private removeDeadPeer(peerId: string) {
     const pc = this.peerConnections.get(peerId);
     if (pc) {
-      pc.close();
+      try {
+        pc.close();
+      } catch {}
       this.peerConnections.delete(peerId);
     }
     this.remoteStreams.delete(peerId);
     this.pendingCandidates.delete(peerId);
     this.onRemoteStreamRemoved(peerId);
-
-    if (isFirebaseConfigured() && db) {
-      try {
-        const deadRef = doc(db, `rooms/${this.roomId}/participants/${peerId}`);
-        deleteDoc(deadRef).catch(() => {});
-      } catch {}
-    }
   }
 
   public async leaveRoom(): Promise<void> {
