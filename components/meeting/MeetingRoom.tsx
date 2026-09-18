@@ -189,9 +189,10 @@ export function MeetingRoom({
       // 2. Try LiveKit SFU first (handles 50 to 100+ participants)
       let connectedViaLiveKit = false;
       try {
+        const identity = initialParticipant.id;
         const username = initialParticipant.name || initialParticipant.id;
         const res = await fetch(
-          `/api/livekit-token?room=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&isHost=${isVerifiedHost}&photoURL=${encodeURIComponent(initialParticipant.photoURL || '')}`
+          `/api/livekit-token?room=${encodeURIComponent(roomId)}&identity=${encodeURIComponent(identity)}&username=${encodeURIComponent(username)}&isHost=${isVerifiedHost}&photoURL=${encodeURIComponent(initialParticipant.photoURL || '')}`
         );
 
         if (res.ok) {
@@ -315,6 +316,18 @@ export function MeetingRoom({
 
         manager.onRemoteStreamRemoved = (peerId) => {
           setRemoteStreams((prev) => {
+            const next = new Map(prev);
+            next.delete(peerId);
+            return next;
+          });
+        };
+
+        manager.onRemoteScreenStreamAdded = (peerId, stream) => {
+          setRemoteScreenStreams((prev) => new Map(prev).set(peerId, new MediaStream(stream.getTracks())));
+        };
+
+        manager.onRemoteScreenStreamRemoved = (peerId) => {
+          setRemoteScreenStreams((prev) => {
             const next = new Map(prev);
             next.delete(peerId);
             return next;
@@ -601,20 +614,12 @@ export function MeetingRoom({
       // --- STOP SHARING ---
       if (isLiveKitSFU && liveKitManagerRef.current) {
         await liveKitManagerRef.current.setScreenShareEnabled(false);
+      } else {
+        rtcManagerRef.current?.setScreenStream(null);
       }
       if (screenStream) {
         screenStream.getTracks().forEach((t) => t.stop());
         setScreenStream(null);
-      }
-      if (isLiveKitSFU && liveKitManagerRef.current) {
-        setLocalStream(liveKitManagerRef.current.getLocalStream());
-      } else {
-        // Restore local camera / audio stream in WebRTC mesh mode
-        const streamToRestore = activeCameraStreamRef.current || initialStream;
-        if (streamToRestore) {
-          rtcManagerRef.current?.setLocalStream(streamToRestore);
-          setLocalStream(streamToRestore);
-        }
       }
       setLocalParticipant((p) => ({ ...p, screenSharing: false }));
       rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
@@ -642,28 +647,22 @@ export function MeetingRoom({
             audio: true,
           });
 
-          // Remember current camera stream so we can cleanly revert when screen share ends
-          if (localStream && !screenStream) {
-            activeCameraStreamRef.current = localStream;
-          }
-
+          // Retain local camera stream intact - do not overwrite localStream!
           setScreenStream(stream);
-          rtcManagerRef.current?.setLocalStream(stream);
-          setLocalStream(stream);
+          rtcManagerRef.current?.setScreenStream(stream);
           setLocalParticipant((p) => ({ ...p, screenSharing: true }));
           rtcManagerRef.current?.updateParticipantState({ screenSharing: true });
 
           // Browser native "Stop Sharing" floating bar handler
-          stream.getVideoTracks()[0].onended = () => {
-            const streamToRestore = activeCameraStreamRef.current || initialStream;
-            if (streamToRestore) {
-              rtcManagerRef.current?.setLocalStream(streamToRestore);
-              setLocalStream(streamToRestore);
-            }
-            setScreenStream(null);
-            setLocalParticipant((p) => ({ ...p, screenSharing: false }));
-            rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
-          };
+          const screenVideoTrack = stream.getVideoTracks()[0];
+          if (screenVideoTrack) {
+            screenVideoTrack.onended = () => {
+              rtcManagerRef.current?.setScreenStream(null);
+              setScreenStream(null);
+              setLocalParticipant((p) => ({ ...p, screenSharing: false }));
+              rtcManagerRef.current?.updateParticipantState({ screenSharing: false });
+            };
+          }
         }
       } catch (err) {
         console.warn('Screen share canceled or failed:', err);

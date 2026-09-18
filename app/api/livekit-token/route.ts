@@ -3,13 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(req: NextRequest) {
   const room = req.nextUrl.searchParams.get('room');
-  const username = req.nextUrl.searchParams.get('username');
+  const rawIdentity = req.nextUrl.searchParams.get('identity') || req.nextUrl.searchParams.get('username');
+  const rawUsername = req.nextUrl.searchParams.get('username') || rawIdentity;
+
   const isHost = req.nextUrl.searchParams.get('isHost') === 'true';
   const photoURL = req.nextUrl.searchParams.get('photoURL');
 
-  if (!room || !username) {
-    return NextResponse.json({ error: 'Missing room or username' }, { status: 400 });
+  if (!room || !rawIdentity) {
+    return NextResponse.json({ error: 'Missing room or identity' }, { status: 400 });
   }
+
+  const identity: string = rawIdentity;
+  const username: string = rawUsername || identity;
 
   const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
   const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
@@ -29,7 +34,7 @@ export async function GET(req: NextRequest) {
     };
 
     const at = new AccessToken(apiKey, apiSecret, {
-      identity: username,
+      identity,
       name: username,
       metadata: JSON.stringify(metadataObj),
     });

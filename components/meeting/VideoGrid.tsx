@@ -22,16 +22,20 @@ interface VideoGridProps {
 function ScreenPresentationStage({
   stream,
   presenter,
+  presenterStream,
   isLocal,
   onStopScreenShare,
 }: {
   stream: MediaStream;
   presenter: Participant;
+  presenterStream?: MediaStream | null;
   isLocal: boolean;
   onStopScreenShare?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const presenterVideoRef = useRef<HTMLVideoElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showPip, setShowPip] = useState(true);
   const stageContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,6 +48,23 @@ function ScreenPresentationStage({
       console.warn('Screen share playback notice:', err);
     });
   }, [stream]);
+
+  // Check if presenter has a live camera video track
+  const presenterHasLiveVideo = Boolean(
+    presenterStream &&
+      presenterStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled)
+  );
+
+  useEffect(() => {
+    const pVideo = presenterVideoRef.current;
+    if (!pVideo || !presenterStream || !presenterHasLiveVideo) return;
+    if (pVideo.srcObject !== presenterStream) {
+      pVideo.srcObject = presenterStream;
+    }
+    pVideo.play().catch((err) => {
+      console.warn('Presenter PIP video playback notice:', err);
+    });
+  }, [presenterStream, presenterHasLiveVideo, showPip]);
 
   const toggleFullscreen = () => {
     if (!stageContainerRef.current) return;
@@ -69,6 +90,43 @@ function ScreenPresentationStage({
         muted={isLocal}
         className="w-full h-full object-contain bg-slate-950"
       />
+
+      {/* Floating Presenter Face Camera (Zoom-style Picture-in-Picture) */}
+      {presenterHasLiveVideo && showPip && (
+        <div className="absolute top-14 right-3 w-36 h-24 sm:w-48 sm:h-32 rounded-xl overflow-hidden border-2 border-indigo-500/60 shadow-2xl bg-slate-900/90 backdrop-blur z-20 group/pip">
+          <video
+            ref={presenterVideoRef}
+            autoPlay
+            playsInline
+            muted={isLocal}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute top-1 right-1 opacity-0 group-hover/pip:opacity-100 transition">
+            <button
+              onClick={() => setShowPip(false)}
+              className="px-1.5 py-0.5 rounded bg-black/80 hover:bg-black text-slate-300 hover:text-white text-[11px] font-bold cursor-pointer"
+              title="Hide Presenter Camera"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="absolute bottom-1 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
+            <span className="px-1.5 py-0.5 rounded bg-black/75 backdrop-blur text-[10px] text-white font-medium truncate max-w-[85%]">
+              {isLocal ? 'You' : presenter.name}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {presenterHasLiveVideo && !showPip && (
+        <button
+          onClick={() => setShowPip(true)}
+          className="absolute top-14 right-3 px-2 py-1 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs text-slate-300 hover:text-white shadow-lg z-20 flex items-center gap-1.5 transition cursor-pointer"
+          title="Show Presenter Camera"
+        >
+          <span>👤 Show Camera</span>
+        </button>
+      )}
 
       {/* Top Banner Overlay */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
@@ -166,6 +224,7 @@ export function VideoGrid({
           <ScreenPresentationStage
             stream={presentationStream}
             presenter={presenter}
+            presenterStream={getStreamForParticipant(presenter.id)}
             isLocal={isLocalScreenSharing}
             onStopScreenShare={onStopScreenShare}
           />

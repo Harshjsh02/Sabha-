@@ -39,8 +39,8 @@ export class LiveKitRoomManager {
     this.localParticipantInfo = localParticipantInfo;
 
     this.room = new Room({
-      adaptiveStream: false,
-      dynacast: false,
+      adaptiveStream: true,
+      dynacast: true,
     });
 
     this.setupListeners();
