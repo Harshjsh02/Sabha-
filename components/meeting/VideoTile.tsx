@@ -47,13 +47,17 @@ export function VideoTile({
   }, [participant.photoURL]);
 
   // Check if participant has a live video track
-  const isVideoAllowed = Boolean(participant.videoEnabled || participant.screenSharing);
+  // For local user: strictly respect the camera toggle state
+  // For remote peer: if an active, enabled video track arrives from the peer, render it immediately
   const hasLiveVideoTrack = Boolean(
     stream &&
-      isVideoAllowed &&
-      stream.getVideoTracks().some(
-        (t) => t.readyState === 'live' && (isLocal ? t.enabled : true)
-      )
+      stream.getVideoTracks().some((t) => {
+        if (t.readyState !== 'live') return false;
+        if (isLocal) {
+          return t.enabled && Boolean(participant.videoEnabled || participant.screenSharing);
+        }
+        return t.enabled;
+      })
   );
 
   // Attach stream to HTMLVideoElement and ensure playback

@@ -393,13 +393,19 @@ export function MeetingRoom({
     };
 
     window.addEventListener('beforeunload', handleCleanExit);
-    window.addEventListener('pagehide', handleCleanExit);
 
     return () => {
       active = false;
       window.removeEventListener('beforeunload', handleCleanExit);
-      window.removeEventListener('pagehide', handleCleanExit);
-      handleCleanExit();
+      if (initialParticipant.isHost) {
+        updateHostPresence(roomId, false).catch(() => {});
+      }
+      if (liveKitManagerRef.current) {
+        liveKitManagerRef.current.disconnect();
+      }
+      if (rtcManagerRef.current) {
+        rtcManagerRef.current.leaveRoom();
+      }
       clearInterval(timer);
       unsubSettings();
       unsubChat();
