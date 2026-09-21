@@ -103,7 +103,6 @@ For comprehensive architectural, engineering, security, and product deep-dives, 
 | 🎙️ [Audio Engine & Speaker Detection](docs/AUDIO_ENGINE.md) | Web Audio API decibel analysis, RMS calculation & active speaker halos |
 | 🗺️ [User Journeys & Interaction Flows](docs/USER_JOURNEY.md) | Host and attendee interaction journeys and escalation flows |
 | 🚀 [Investor & Community Pitch](docs/PITCH.md) | Vision, market opportunity, unfair advantages & key milestones |
-| ❓ [Frequently Asked Questions (FAQ)](docs/FAQ.md) | Setup assistance, audio/video troubleshooting & technical FAQs |
 | 📋 [Task Plan & Sprint Breakdown](docs/tasks.md) | Granular sprint-by-sprint implementation tracking |
 | 🐛 [Known Issues & Tech Debt](docs/KNOWN_ISSUES.md) | Log of bugs, dead code, and unresolved typing issues |
 | 📝 [Roadmap & Todo List](docs/todo.md) | Immediate action items and upcoming features |

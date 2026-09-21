@@ -115,7 +115,6 @@ Comprehensive project specifications, guides, and architectural documentation.
 - `AUDIO_ENGINE.md` - Documentation on the Web Audio API analysis and active speaker logic.
 - `context.md` - Current development context, state management, and edge cases.
 - `DATABASE.md` - Firebase Firestore ERD, rules, and collection schemas.
-- `FAQ.md` - Frequently asked setup and troubleshooting questions.
 - `KNOWN_ISSUES.md` - Central ledger of bugs, dead code, and technical debt.
 - `PITCH.md` - Vision and value proposition for communities and investors.
 - `PRD.md` - Product Requirements Document outlining Zoom parity features and user stories.
